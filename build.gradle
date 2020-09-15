@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '4.0.4'
+}
+
+
+mainClassName = 'uk.co.hexillium.rhul.compsoc.Bot'
+
+group 'me.jcsawyer'
+version '1.0'
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+dependencies {
+    implementation 'net.dv8tion:JDA:4.2.0_203'
+    // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.13.1'
+    // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-slf4j18-impl
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j18-impl', version: '2.13.1'
+    // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-api
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.13.1'
+    // https://mvnrepository.com/artifact/io.github.classgraph/classgraph
+    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.65'
+    implementation 'com.zaxxer:HikariCP:3.4.5'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.10.0'
+}
