@@ -1,7 +1,6 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
-import me.jcsawyer.classroombot.entities.GuildSettings;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
@@ -79,8 +78,10 @@ public class GuildData {
                             }
 
                             GuildSettings settings = new GuildSettings(guildID,
+                                    null, 0, 0, 0, 0, 0
                                     //todo
-                                    ,set.getString("prefix"));
+                                    //,set.getString("prefix")
+                            );
 
                             success.accept(settings);
                         }

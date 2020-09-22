@@ -10,10 +10,10 @@ import javax.annotation.Nonnull;
 
 public class EventManager implements EventListener{
 
-    me.jcsawyer.classroombot.CommandDispatcher dispatcher;
+    CommandDispatcher dispatcher;
 
     EventManager(){
-        this.dispatcher = new me.jcsawyer.classroombot.CommandDispatcher();
+        this.dispatcher = new CommandDispatcher();
     }
 
     @Override

@@ -29,7 +29,7 @@ public class CommandDispatcher {
     public CommandDispatcher() {
         this.commands = new ArrayList<>();
 
-        String pkg = "me.jcsawyer.classroombot.commands";
+        String pkg = "uk.co.hexillium.rhul.compsoc.commands";
         try (ScanResult scanResult =
                      new ClassGraph()
                              .enableClassInfo()

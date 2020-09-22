@@ -205,7 +205,7 @@ public class CommandEvent {
 
     /**
      * Gets the {@link User} who ran this command.
-     * The same as {@link me.jcsawyer.classroombot.CommandEvent#getUser()}
+     * The same as {@link CommandEvent#getUser()}
      *
      * @return the user who ran this command.
      */
