@@ -10,11 +10,13 @@ import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,7 +61,7 @@ public class CommandDispatcher {
     public void dispatchCommand(GuildMessageReceivedEvent event) {
         if (event.getAuthor().isBot() || event.getMember() == null) return;
         String message = event.getMessage().getContentRaw();
-        Database.GUILD_DATA.fetchData(event.getGuild().getIdLong(), settings -> {
+        fetchGuildData(event.getGuild().getIdLong(), settings -> {
             String delim = settings == null ? defaultCommandDelimiter : settings.getPrefix();
             if (message.startsWith(delim)) {
                 String[] args = message.split("\\s+");
@@ -68,13 +70,21 @@ public class CommandDispatcher {
                 if (triggers.size() == 0) return;
                 logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild commands " + triggers.stream().map(c -> c.getClass().getSimpleName()).collect(Collectors.joining(" ")));
                 for (Command cmd : triggers) {
-                    CommandEvent cmdE = new CommandEvent(event);
+                    CommandEvent cmdE = new CommandEvent(event, settings);
                     cmd.internalHandleCommand(cmdE);
                 }
 
             }
-        }, err -> {});
+        });
 
+    }
+
+    private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){
+        if (Database.GUILD_DATA == null){
+            settings.accept(GuildSettings.getDefault(guildID));
+            return;
+        }
+        Database.GUILD_DATA.fetchData(guildID, settings, null);
     }
 
     private List<Command> getCommandsForTrigger(String trigger, boolean guildCommand) {

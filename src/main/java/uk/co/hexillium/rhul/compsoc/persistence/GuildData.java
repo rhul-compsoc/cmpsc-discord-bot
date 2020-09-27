@@ -73,7 +73,7 @@ public class GuildData {
                         try (ResultSet set = getGuildData.getResultSet()){
 
                             if (set == null || !set.next()) {
-                                success.accept(null);
+                                success.accept(GuildSettings.getDefault(guildID));
                                 return;
                             }
 

@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -29,6 +30,8 @@ public class CommandEvent {
     String[] args;
     String fullArg;
 
+    GuildSettings settings;
+
     boolean isGuildMessage;
 
     public CommandEvent(PrivateMessageReceivedEvent event) {
@@ -39,7 +42,7 @@ public class CommandEvent {
         this.message = event.getMessage();
     }
 
-    public CommandEvent(GuildMessageReceivedEvent event) {
+    public CommandEvent(GuildMessageReceivedEvent event, GuildSettings settings) {
         isGuildMessage = true;
         textChannel = event.getChannel();
         common(event.getMessage().getContentRaw());
@@ -244,6 +247,15 @@ public class CommandEvent {
     public Member getSelfMember(){
         if (!isGuildMessage()) throw new IllegalStateException("Not a guild event.");
         return guildEvent.getGuild().getSelfMember();
+    }
+
+    /**
+     * Return the settings for this guild.  This will give information on prefix values, as well as roleIDs.
+     * @return the guild settings.  Null iff this was called from a privatemessage.
+     */
+    @Nullable
+    public GuildSettings getGuildSettings(){
+        return settings;
     }
 
 
