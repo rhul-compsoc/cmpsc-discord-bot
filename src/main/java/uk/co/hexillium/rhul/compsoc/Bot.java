@@ -33,7 +33,6 @@ public class Bot {
     }
 
     private static JDA initBot() throws IOException, LoginException, InterruptedException {
-        database.hikariConnect();
         List<String> lines = Files.readAllLines(Paths.get("token.txt"));
         JDA jda = JDABuilder.createDefault(lines.get(0), EnumSet.allOf(GatewayIntent.class))
                 .enableCache(EnumSet.allOf(CacheFlag.class))
