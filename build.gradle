@@ -7,7 +7,7 @@ plugins {
 
 mainClassName = 'uk.co.hexillium.rhul.compsoc.Bot'
 
-group 'me.jcsawyer'
+group 'uk.co.hexillium.rhul'
 version '1.0'
 
 repositories {
@@ -15,6 +15,13 @@ repositories {
     jcenter()
 }
 
+jar {
+    manifest {
+        attributes(
+                'Class-Path': 'postgresql-42.2.9.jar',
+        )
+    }
+}
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'

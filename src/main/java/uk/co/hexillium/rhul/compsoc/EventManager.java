@@ -12,8 +12,10 @@ public class EventManager implements EventListener{
 
     CommandDispatcher dispatcher;
 
-    EventManager(){
-        this.dispatcher = new CommandDispatcher();
+    EventManager(){}
+
+    public void setDispatcher(CommandDispatcher dispatcher) {
+        this.dispatcher = dispatcher;
     }
 
     @Override
@@ -23,10 +25,12 @@ public class EventManager implements EventListener{
             dispatcher.onLoad(event.getJDA());
         }
         if (event instanceof GuildMessageReceivedEvent){
-            dispatcher.dispatchCommand((GuildMessageReceivedEvent) event);
+            if (dispatcher != null)
+                dispatcher.dispatchCommand((GuildMessageReceivedEvent) event);
         }
         if (event instanceof PrivateMessageReceivedEvent){
-            dispatcher.dispatchCommand((PrivateMessageReceivedEvent) event);
+            if (dispatcher != null)
+                dispatcher.dispatchCommand((PrivateMessageReceivedEvent) event);
         }
     }
 }

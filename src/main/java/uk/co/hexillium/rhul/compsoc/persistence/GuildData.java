@@ -5,6 +5,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -31,7 +33,14 @@ public class GuildData {
         fetchData(Database.dbPool, guildID, success, failure);
     }
 
-    public void setGuildData(long guildID, GuildSettings data, Runnable success, Consumer<SQLException> failure) {
+    /**
+     * Async method for updating guild data.
+     * @param guildID
+     * @param data
+     * @param success
+     * @param failure
+     */
+    public void setGuildData(long guildID, @Nonnull GuildSettings data, @Nullable Runnable success, @Nullable Consumer<SQLException> failure) {
         setGuildData(Database.dbPool, guildID, data, success, failure);
     }
 
@@ -78,7 +87,7 @@ public class GuildData {
                             }
 
                             GuildSettings settings = new GuildSettings(guildID,
-                                    null, 0, 0, 0, 0, 0
+                                    null, 0, 0, 0, 0, 0, 0
                                     //todo
                                     //,set.getString("prefix")
                             );

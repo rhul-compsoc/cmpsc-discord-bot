@@ -7,7 +7,9 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Message;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import uk.co.hexillium.rhul.compsoc.Disabled;
 
+@Disabled
 public class TestCommand extends Command {
 
     private static final String[] COMMANDS = {"testcommand", "test"};

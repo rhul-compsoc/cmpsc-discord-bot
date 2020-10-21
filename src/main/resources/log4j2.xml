@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="info" name="OliverBot" packages="" append="true" >
+    <Appenders>
+<!--        <File name="MainLog" fileName="logs/oliverbot.log">-->
+<!--            <PatternLayout>-->
+<!--                <Pattern>%d %p %c{1.} [%t] %m%n</Pattern>-->
+<!--            </PatternLayout>-->
+<!--        </File>-->
+        <RollingFile name="MainLog" fileName="logs/latest.log" filePattern="logs/app-info-%d{yyyy-MM-dd}.log">
+            <PatternLayout>
+                <pattern>[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n</pattern>
+            </PatternLayout>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true" />
+            </Policies>
+        </RollingFile>
+        <Console name="STDOUT" target="SYSTEM_OUT">
+            <PatternLayout>
+                <pattern>[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n</pattern>
+            </PatternLayout>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="MainLog"/>
+            <AppenderRef ref="STDOUT"/>
+        </Root>
+    </Loggers>
+</Configuration>
+
+    <!--
+
+        Properties properties = new Properties();
+        properties.setProperty("log4j.rootLogger","DEBUG,stdout,MyFile");
+        properties.setProperty("log4j.rootCategory","DEBUG");
+
+        properties.setProperty("log4j.appender.stdout",     "org.apache.log4j.ConsoleAppender");
+        properties.setProperty("log4j.appender.stdout.layout",  "org.apache.log4j.PatternLayout");
+        properties.setProperty("log4j.appender.stdout.layout.ConversionPattern","%d{yyyy/MM/dd HH:mm:ss.SSS} [%5p] %t (%F) - %m%n");
+
+        properties.setProperty("log4j.appender.MyFile", "org.apache.log4j.RollingFileAppender");
+        properties.setProperty("log4j.appender.MyFile.File", "moisbot.log");
+        properties.setProperty("log4j.appender.MyFile.MaxFileSize", "500KB");
+        properties.setProperty("log4j.appender.MyFile.MaxBackupIndex", "1");
+        properties.setProperty("log4j.appender.MyFile.layout",  "org.apache.log4j.PatternLayout");
+        properties.setProperty("log4j.appender.MyFile.layout.ConversionPattern","%d{yyyy/MM/dd HH:mm:ss.SSS} [%5p] %t (%F) - %m%n");
+
+    -->

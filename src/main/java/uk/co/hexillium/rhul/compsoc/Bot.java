@@ -11,6 +11,7 @@ import net.dv8tion.jda.internal.requests.RateLimiter;
 import net.dv8tion.jda.internal.requests.ratelimit.BotRateLimiter;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.config.Configurator;
+import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
@@ -25,8 +26,8 @@ public class Bot {
     static Database database = Database.getInstance();
 
     public static void main(String[] args) throws IOException, LoginException, InterruptedException {
-        Configurator.setLevel(BotRateLimiter.class.getName(), Level.TRACE);
-        Configurator.setLevel(RateLimiter.class.getName(), Level.TRACE);
+//        Configurator.setLevel(BotRateLimiter.class.getName(), Level.TRACE);
+//        Configurator.setLevel(RateLimiter.class.getName(), Level.TRACE);
         //read the token in
         initBot();
 //        new CommandDispatcher();
@@ -34,14 +35,18 @@ public class Bot {
 
     private static JDA initBot() throws IOException, LoginException, InterruptedException {
         List<String> lines = Files.readAllLines(Paths.get("token.txt"));
+        EventManager manager = new EventManager();
         JDA jda = JDABuilder.createDefault(lines.get(0), EnumSet.allOf(GatewayIntent.class))
                 .enableCache(EnumSet.allOf(CacheFlag.class))
                 .setMemberCachePolicy(MemberCachePolicy.ALL)
                 .setChunkingFilter(ChunkingFilter.ALL)
-                .addEventListeners(new EventManager())
+                .addEventListeners(manager)
                 .build();
+        CommandDispatcher dispatcher = new CommandDispatcher();
+        manager.setDispatcher(dispatcher);
+        JobScheduler scheduler = new JobScheduler(database, jda);
+        dispatcher.loadScheduler(scheduler);
         jda.awaitReady();
-
         return jda;
     }
 

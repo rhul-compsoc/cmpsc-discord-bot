@@ -4,6 +4,7 @@ import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
+import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import java.util.Arrays;
 
@@ -16,6 +17,7 @@ public abstract class Command {
     protected String category;
     protected Permission[] requiredBotPermissions = new Permission[]{};
     protected Permission[] requiredUserPermissions = new Permission[]{};
+    private JobScheduler scheduler;
 
     public Command(String name, String description, String help, String[] commands, String category){
         this.name = name;
@@ -139,5 +141,17 @@ public abstract class Command {
      * @param manager the commandDispatcher context.
      */
     public void onLoad(JDA jda, CommandDispatcher manager){}
+
+    /**
+     * This is the entry point for scheduling things to happen
+     * @return The {@link JobScheduler} that is registered to fire triggers.
+     */
+    protected JobScheduler getScheduler(){
+        return scheduler;
+    }
+
+    public final void setScheduler(JobScheduler scheduler){
+        this.scheduler = scheduler;
+    }
 
 }

@@ -11,6 +11,7 @@ import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
+import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -24,7 +25,7 @@ public class CommandDispatcher {
 
     private final static String defaultCommandDelimiter = "!";
 
-    Logger logger = LogManager.getLogger(CommandDispatcher.class);
+    final static Logger logger = LogManager.getLogger(CommandDispatcher.class);
 
     private List<Command> commands;
 
@@ -39,14 +40,14 @@ public class CommandDispatcher {
                              .enableAnnotationInfo()
                              .scan()) {
             System.out.println(scanResult.getAllClasses().toString());
-            for (ClassInfo routeClassInfo : scanResult.getSubclasses(pkg + ".Command")) {
-                System.out.println("Found " + routeClassInfo.toString());
+            for (ClassInfo routeClassInfo : scanResult.getSubclasses(pkg + ".Command")
+                    .exclude(scanResult.getClassesWithAnnotation("uk.co.hexillium.rhul.compsoc.Disabled"))) {
                 try {
                     this.commands.add((Command) routeClassInfo.loadClass().getDeclaredConstructor().newInstance());
-                    logger.info("Loaded " + routeClassInfo.loadClass().getName());
+                    logger.info("Loaded command " + routeClassInfo.loadClass().getName());
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                         NoSuchMethodException | IllegalArgumentException e) {
-                    logger.error("Failed to instantiate " + routeClassInfo.loadClass().getName() + ", " + e.getMessage());
+                    logger.error("Failed to instantiate command " + routeClassInfo.loadClass().getName() + ", " + e.getMessage());
                 }
             }
         }
@@ -55,6 +56,11 @@ public class CommandDispatcher {
     public void onLoad(JDA jda) {
         for (Command c : commands) {
             c.onLoad(jda, this);
+        }
+    }
+    public void loadScheduler(JobScheduler scheduler) {
+        for (Command c : commands) {
+            c.setScheduler(scheduler);
         }
     }
 
@@ -80,8 +86,10 @@ public class CommandDispatcher {
     }
 
     private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){
-        if (Database.GUILD_DATA == null){
-            settings.accept(GuildSettings.getDefault(guildID));
+        if (Database.GUILD_DATA == null || true){ //todo
+            Database.runLater(() -> {
+                settings.accept(GuildSettings.getDefault(guildID));
+            });
             return;
         }
         Database.GUILD_DATA.fetchData(guildID, settings, null);
@@ -96,14 +104,16 @@ public class CommandDispatcher {
         if (!message.startsWith(defaultCommandDelimiter)) return;
         String[] args = message.split("\\s+");
         String command = args[0].substring(defaultCommandDelimiter.length());
+        Database.runLater(() -> {
+            List<Command> triggers = getCommandsForTrigger(command, false);
+            if (triggers.size() == 0) return;
+            logger.info(event.getAuthor().getAsTag() + " ran private commands " + triggers.stream().map(c -> c.getClass().getSimpleName()).collect(Collectors.joining(" ")));
+            for (Command cmd : triggers) {
+                CommandEvent cmdE = new CommandEvent(event);
+                cmd.internalHandleCommand(cmdE);
+            }
+        });
 
-        List<Command> triggers = getCommandsForTrigger(command, false);
-        if (triggers.size() == 0) return;
-        logger.info("Ran private commands " + triggers.stream().map(c -> c.getClass().getSimpleName()).collect(Collectors.joining(" ")));
-        for (Command cmd : triggers) {
-            CommandEvent cmdE = new CommandEvent(event);
-            cmd.internalHandleCommand(cmdE);
-        }
     }
 
     public boolean isCommand(String cmd) {
