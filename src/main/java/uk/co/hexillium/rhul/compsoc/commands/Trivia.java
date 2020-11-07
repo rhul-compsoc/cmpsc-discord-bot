@@ -65,6 +65,7 @@ public class Trivia extends Command implements EventListener{
                 return;
             }
             GuildMessageReceivedEvent event = (GuildMessageReceivedEvent) genericEvent;
+            if (event.getChannel().getIdLong() == channelID) return; //don't spawn from things happening in the channel - it's just annoying.
             // we can spawn one in!
             // let's do a 2/15 chance of that happening
             if (randInclusive(1, 15) > 2) return;
@@ -73,10 +74,12 @@ public class Trivia extends Command implements EventListener{
                 LOGGER.error("Failed to find textchannel. Aborting");
                 return;
             }
-            target.sendMessage(ask()).queue(m -> {
+            Question question = genQuestion();
+            target.sendMessage(askQuestion(question)).queue(m -> {
                 lock.lock();
                 try {
                     makeSpace(target);
+                    this.question = question;
                     this.recentMessageSpawnID = event.getMessageIdLong();
                     recentSentMessageID = m.getIdLong();
                 } finally {
@@ -150,6 +153,7 @@ public class Trivia extends Command implements EventListener{
                         lock.lock();
                         try {
                             makeSpace(event.getTextChannel());
+                            this.question = newQ;
                             this.recentSentMessageID = msg.getIdLong();
                         } finally {
                             lock.unlock();
@@ -220,7 +224,6 @@ public class Trivia extends Command implements EventListener{
         EmbedBuilder builder = new EmbedBuilder();
         builder.setColor(0x3040c0);
         builder.setTitle("Question!");
-        this.question = question;
         builder.setDescription(question.getQuery());
         builder.setFooter("You can score " + question.getValue() + " point(s) by running `!t <answer>` and getting the answer correct.");
         return builder.build();
