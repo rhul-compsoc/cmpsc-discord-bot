@@ -14,6 +14,7 @@ import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.DuplicateEntry;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.VerificationMessage;
 
 import java.util.Arrays;
 import java.util.List;
@@ -66,6 +67,10 @@ public class Register extends Command implements EventListener {
             logger.error("I don't know what happened: " + event.getChannel().getClass().getName());
             return;
         }
+        if (event.getArgs().length == 0){
+            event.reply(getYourPrivateData());
+            return;
+        }
         if (event.getArgs().length != 2){
             event.sendEmbed("Error in formatting", "I was expecting a picture of your card and `!register aaaa999@live.rhul.ac.uk 100999999`\n\n" +
                     "Your email can also be `first.last.year@live.rhul.ac.uk`", 0xff0000);
@@ -96,13 +101,15 @@ public class Register extends Command implements EventListener {
             return;
         }
 
-        //looks good
+        //emergency debugging
         TextChannel channel = event.getJDA().getTextChannelById(CHANNEL_ID);
         if (channel == null){
             logger.error("Cannot find channel!");
             logger.info(event.getJDA().getTextChannelCache().asList());
             return;
         }
+
+        //looks good
 
         Message.Attachment attachment = event.getMessage().getAttachments().get(0);
         attachment.retrieveInputStream().thenAccept(is -> {
@@ -135,6 +142,7 @@ public class Register extends Command implements EventListener {
         embed.setTitle("Register for CompSoc");
         embed.setDescription("Please send your RHUL email address, and your student number, with an image of your card attached.\n\nIt should look like this:\n`!register aaaa999@live.rhul.ac.uk 100999999`\n\n" +
                 "Please contact a member of committee for any additional information.");
+        embed.setImage("https://cdn.discordapp.com/attachments/647059719705329675/768537348816240650/2020-10-21_19-11-42.gif");
         embed.setColor(0xb000b0);
         return embed.build();
     }
@@ -220,6 +228,20 @@ public class Register extends Command implements EventListener {
         return embed.build();
     }
 
+//    private void updateMessage(Message message){
+//        EmbedBuilder embed = new EmbedBuilder();
+//        VerificationMessage vMsg = Database.STUDENT_VERIFICATION.updateVerificationMessage(message.getIdLong());
+//        if (vMsg.isStudentVerified()){
+//            // v3erif
+//        }
+//        embed.addField(user.getAsTag(),
+//                "Login Name: `" + loginName + "`\r\n" +
+//                        "Student ID: `" + studentID + "`\r\n" +
+//                        "Discord ID: `" + user.getIdLong() + "`\r\n" +
+//                        "Mention: " + user.getAsMention(), false);
+//
+//    }
+
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
         if (!(genericEvent instanceof GuildMessageReactionAddEvent)){
@@ -253,6 +275,8 @@ public class Register extends Command implements EventListener {
                     bld.setImage(null);
                     msg.editMessage(bld.build()).override(true).queue();
                     msg.clearReactions().queue();
+//                    msg.addReaction("↩").queue();
+//                    msg.addReaction("🔄").queue();
                     msg.getJDA().openPrivateChannelById(studentID).queue(ch -> {
                         ch.sendMessage(privateDataAccepted()).queue();
                     });
@@ -269,6 +293,8 @@ public class Register extends Command implements EventListener {
                     bld.setImage(null);
                     msg.editMessage(bld.build()).override(true).queue();
                     msg.clearReactions().queue();
+//                    msg.addReaction("↩").queue();
+//                    msg.addReaction("🔄").queue();
                     msg.getJDA().openPrivateChannelById(studentID).queue(ch -> {
                         ch.sendMessage(privateDataDenied()).queue();
                     });

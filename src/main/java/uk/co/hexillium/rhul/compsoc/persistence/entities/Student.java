@@ -16,13 +16,17 @@ public class Student {
     private long discordUserID;  //64-bit int
     private String email;        //5-64 chars
 
+    private boolean verified;
+    private boolean denied;
+
 
     //handled by the database - these are merely markers for the record and should never be changed manually.
     final transient OffsetDateTime creationDate;
     final transient OffsetDateTime modificationDate;
 
-    public Student(String phoneNumber, String studentNo, String firstName, String lastName,
-                   long discordUserID, String email, OffsetDateTime creationDate, OffsetDateTime modificationDate) {
+    public Student(@Nullable String phoneNumber, String studentNo, String firstName, String lastName,
+                   long discordUserID, String email, OffsetDateTime creationDate, OffsetDateTime modificationDate,
+                   boolean verified, boolean denied) {
         this.phoneNumber = phoneNumber;
         this.studentNo = studentNo;
         this.firstName = firstName;
@@ -31,6 +35,8 @@ public class Student {
         this.email = email;
         this.creationDate = creationDate;
         this.modificationDate = modificationDate;
+        this.denied = denied;
+        this.verified = verified;
     }
 
     /**
@@ -103,5 +109,13 @@ public class Student {
     @Nonnull
     public OffsetDateTime getModificationDate() {
         return modificationDate;
+    }
+
+    public boolean isVerified() {
+        return verified;
+    }
+
+    public boolean isDenied() {
+        return denied;
     }
 }

@@ -4,6 +4,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.DuplicateEntry;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.Student;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.VerificationMessage;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -42,6 +44,11 @@ public class StudentVerification {
             "select student_discord_snowflake, student_verified, student_details_invalidated from student_verification where student_id = ?::varchar;";
     private final static String PAST_DUPE_NAMES =
             "select student_discord_snowflake, student_verified, student_details_invalidated from student_verification where student_login_name = ?::varchar;";
+    private final static String FETCH_MESSAGE_UPDATE =
+            "select student_id, student_login_name, student_verified, student_verified_time, " +
+                    "       student_details_submitted, student_details_invalidated, student_discord_snowflake, " +
+                    "       student_details_invalidated_time " +
+                    "from student_verification where student_verification_message_snowflake = ?;";
 
     private HikariDataSource source;
 
@@ -180,6 +187,38 @@ public class StudentVerification {
         } catch (SQLException ex){
             LOGGER.error("Failed to validate student", ex);
         }
+    }
+
+    public VerificationMessage updateVerificationMessage(long messageID){
+        try (Connection connection = source.getConnection();
+                PreparedStatement statement = connection.prepareStatement(FETCH_MESSAGE_UPDATE)){
+            statement.setLong(1, messageID);
+
+            try (ResultSet set = statement.executeQuery()) {
+                if (!set.next()){
+                    return null;
+                }
+                /*
+                student_id, student_login_name, student_verified, student_verified_time,
+       student_details_submitted, student_details_invalidated, student_discord_snowflake,
+       student_details_invalidated_time
+                 */
+                return new VerificationMessage(
+                        set.getString("student_id"),
+                        set.getString("student_login_name"),
+                        set.getBoolean("student_verified"),
+                        set.getLong("student_verified_time"),
+                        set.getLong("student_details_submitted"),
+                        set.getBoolean("student_details_invalidated"),
+                        set.getLong("student_discord_snowflake"),
+                        set.getLong("student_details_invalidated_time")
+                );
+            }
+
+        } catch (SQLException e) {
+            LOGGER.error("Failed to fetch verification message update");
+        }
+        return null;
     }
 
 }

@@ -24,6 +24,9 @@ public class Database {
     public static GuildData GUILD_DATA;
     public static JobStorage JOB_STORAGE;
     public static StudentVerification STUDENT_VERIFICATION;
+    public static AuthTokenStorage AUTH_TOKEN_STORAGE;
+    public static ExperienceStorage EXPERIENCE_STORAGE;
+    public static TriviaStorage TRIVIA_STORAGE;
 
     public static Database getInstance(){
         if (instance == null){
@@ -62,7 +65,9 @@ public class Database {
         GUILD_DATA = new GuildData(source);
         JOB_STORAGE = new JobStorage(source);
         STUDENT_VERIFICATION = new StudentVerification(source);
-
+        AUTH_TOKEN_STORAGE = new AuthTokenStorage(source);
+        EXPERIENCE_STORAGE = new ExperienceStorage(source);
+        TRIVIA_STORAGE = new TriviaStorage(source);
     }
 
     public HikariDataSource getSource(){

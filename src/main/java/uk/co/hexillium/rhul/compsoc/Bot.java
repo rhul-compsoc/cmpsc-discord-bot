@@ -1,5 +1,11 @@
 package uk.co.hexillium.rhul.compsoc;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import uk.co.hexillium.rhul.compsoc.api.RestAPI;
+import uk.co.hexillium.rhul.compsoc.chat.ChatXP;
+import uk.co.hexillium.rhul.compsoc.handlers.InformationUpdateHandler;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -17,20 +23,31 @@ import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.EnumSet;
-import java.util.List;
+import java.util.*;
 
 public class Bot {
 
     static String[] emojis = {"✅", "❓", "❌"};
     static Database database = Database.getInstance();
+    static Logger logger = LogManager.getLogger(Bot.class);
+    static ChatXP chatXP;
+    static JDA jda;
 
     public static void main(String[] args) throws IOException, LoginException, InterruptedException {
 //        Configurator.setLevel(BotRateLimiter.class.getName(), Level.TRACE);
 //        Configurator.setLevel(RateLimiter.class.getName(), Level.TRACE);
         //read the token in
-        initBot();
+        jda = initBot();
 //        new CommandDispatcher();
+
+
+        RestAPI api = new RestAPI(6570, "api", jda, new ObjectMapper());
+        ArrayList<String> argList = new ArrayList<>(Arrays.asList(args));
+        if (argList.contains("-genToken")){
+            Database.AUTH_TOKEN_STORAGE.addAuthToken(System.currentTimeMillis() + 1000 * 60 * 60 * 24 * 365, "Year-long token", bytes -> {
+                logger.info("Super-secret token -> " + Base64.getEncoder().encodeToString(bytes));
+            }, fail -> logger.error(fail.getMessage()));
+        }
     }
 
     private static JDA initBot() throws IOException, LoginException, InterruptedException {
@@ -46,7 +63,9 @@ public class Bot {
         manager.setDispatcher(dispatcher);
         JobScheduler scheduler = new JobScheduler(database, jda);
         dispatcher.loadScheduler(scheduler);
+        chatXP = new ChatXP(jda);
         jda.awaitReady();
+        InformationUpdateHandler updateHandler = new InformationUpdateHandler(jda);
         return jda;
     }
 
