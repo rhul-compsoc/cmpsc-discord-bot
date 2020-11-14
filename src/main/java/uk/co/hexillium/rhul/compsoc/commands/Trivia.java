@@ -18,8 +18,13 @@ import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
+import java.awt.*;
+import java.awt.geom.QuadCurve2D;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
@@ -142,7 +147,7 @@ public class Trivia extends Command implements EventListener{
                     int depth = Integer.parseInt(event.getArgs()[2]);
                     int hardness = Integer.parseInt(event.getArgs()[3]);
 
-                    BooleanAlgebra balg = new BooleanAlgebra(depth, hardness);
+                    BooleanAlgebra balg = new BooleanAlgebra(depth, hardness, 0);
                     LOGGER.info("Manually spawned a new boolean problem with depth: " + depth + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
                     Question newQ = new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg));
                     if (newQ.getQuery().length() >= 2048){
@@ -234,7 +239,7 @@ public class Trivia extends Command implements EventListener{
         embed.setTitle("Leaderboard");
         StringBuilder strbld = new StringBuilder();
         strbld.append("Run `!leaderboard <pagenum>` to view the scores for that page");
-        strbld.append("```");
+        strbld.append("```\n");
         strbld.append("Rank | Score | Username ");
         strbld.append("\n");
         strbld.append("-------------------------------");
@@ -276,7 +281,7 @@ public class Trivia extends Command implements EventListener{
             difficulty = randInclusive(1, difficulty);
             hardness = randInclusive(3, 7);
             hardness = randInclusive(2, hardness);
-            balg = new BooleanAlgebra(difficulty, hardness);
+            balg = new BooleanAlgebra(difficulty, hardness, 0);
             if (balg.toString().length() < 2048) invalid = false;
         }
         LOGGER.info("Automatically spawned a new boolean problem with depth: " + difficulty + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
@@ -337,8 +342,8 @@ class BooleanAlgebra {
 
     boolean notted;
 
-    BooleanAlgebra(int depth, int hardness){
-        this.notted = ThreadLocalRandom.current().nextInt(10) == 9;
+    BooleanAlgebra(int depth, int hardness, int currentLevel){
+        this.notted = ThreadLocalRandom.current().nextInt(10) >= 9;
         if (depth < 0){
             this.value = ThreadLocalRandom.current().nextBoolean();
             return;
@@ -349,9 +354,67 @@ class BooleanAlgebra {
         nodes = new BooleanAlgebra[x];
         for (int i = 0; i < x; i++){
             nodes[i] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness/2)) + 1),
-                    hardness - ThreadLocalRandom.current().nextInt(0, 2));
+                    hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel);
         }
-        stage = BooleanOP.getRand();
+        if (depth > 3 && currentLevel == 0){
+            stage = BooleanOP.XOR;
+        } else {
+            stage = BooleanOP.getRand();
+        }
+    }
+
+    public BufferedImage genImage(){
+        if (nodes == null){
+            BufferedImage bim = new BufferedImage(100, 25, BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics = (Graphics2D) bim.getGraphics();
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, bim.getWidth(), bim.getHeight());
+            graphics.setColor(Color.BLACK);
+            Font f = new Font("Courier New", Font.PLAIN, 15);
+            graphics.setFont(f);
+            String str = String.valueOf(value).toUpperCase();
+            Rectangle2D layout = graphics.getFontMetrics(f).getStringBounds(str, graphics);
+            int y = (int) (0 + ((bim.getHeight() - layout.getHeight()) / 2) + graphics.getFontMetrics(f).getAscent());
+            graphics.drawString(str, 0,  y);
+            if (notted){
+                graphics.drawLine(0,  y - graphics.getFontMetrics(f).getAscent() + 1, (int) layout.getWidth(), y - graphics.getFontMetrics(f).getAscent() + 1);
+            }
+
+            graphics.drawLine((int) layout.getWidth(), 12, 100, 12);
+
+//            graphics.setColor(Color.RED);
+//            graphics.drawRect(0, 0, 99, 24);
+            graphics.dispose();
+            return bim;
+        }
+        List<BufferedImage> images = new ArrayList<>();
+        for (BooleanAlgebra balg : nodes){
+            images.add(balg.genImage());
+        }
+        int totalHeight = images.stream().map(BufferedImage::getHeight).mapToInt(Integer::intValue).sum();
+        int maxWidth = images.stream().map(BufferedImage::getWidth).mapToInt(Integer::intValue).max().orElse(0);
+        int width = 200;
+        BufferedImage bim = new BufferedImage(maxWidth + width, totalHeight, BufferedImage.TYPE_INT_RGB);
+        width = (int) (0.8 * width);
+        Graphics2D g2 = (Graphics2D) bim.getGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, bim.getWidth(), bim.getHeight());
+        g2.setColor(Color.BLACK);
+        int yOffset = 0;
+        for (BufferedImage imgs : images){
+            g2.drawImage(imgs, maxWidth - imgs.getWidth(), yOffset, null);
+            yOffset += imgs.getHeight();
+        }
+        stage.drawOp(g2, maxWidth, width , 0 + 2, totalHeight - 2);
+        g2.setColor(Color.BLACK);
+        g2.drawLine(maxWidth + width, totalHeight/2, bim.getWidth(), totalHeight/2);
+        if (notted){
+            g2.fillOval(maxWidth + width, totalHeight/2 - 4, 9, 9);
+            g2.setColor(Color.WHITE);
+            g2.fillOval(maxWidth + (width+1), totalHeight/2 - 3, 7, 7);
+        }
+        g2.dispose();
+        return bim;
     }
 
     int getOperations(){
@@ -397,9 +460,43 @@ class BooleanAlgebra {
 }
 
 enum BooleanOP {
-    AND("∧", (a, b) -> a & b),
-    OR("∨", (a, b) -> a | b),
-    XOR("⊕", (a, b) -> a ^ b),
+    AND("∧", (a, b) -> a & b){
+        @Override
+        void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
+            g2.setColor(Color.BLACK);
+            //vertical line for the and
+            g2.drawLine(startX, startY, startX, startY + heightY - 1);
+
+            //curved end
+            g2.drawArc(startX - widthX, startY, 2 * widthX, heightY - 1, 270, 180);
+        }
+    },
+    OR("∨", (a, b) -> a | b) {
+        @Override
+        void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
+
+            QuadCurve2D curve = new QuadCurve2D.Double(startX, startY, startX + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
+            g2.draw(curve);
+            curve = new QuadCurve2D.Double(startX, startY + heightY, startX + (2*widthX/3d), (startY+heightY) - (heightY/10d), startX + widthX - 1, (startY+heightY) - heightY/2d);
+            g2.draw(curve);
+            curve = new QuadCurve2D.Double(startX, startY, startX + widthX/2.5d, startY+(heightY/2d), startX, (startY+heightY));
+            g2.draw(curve);
+        }
+    },
+    XOR("⊕", (a, b) -> a ^ b) {
+        @Override
+        void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
+
+            QuadCurve2D curve = new QuadCurve2D.Double(startX+5, startY, startX+5 + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
+            g2.draw(curve);
+            curve = new QuadCurve2D.Double(startX+5, startY + heightY, startX + (2*widthX/3d), (startY+heightY) - (heightY/10d), startX + widthX - 1, (startY+heightY) - heightY/2d);
+            g2.draw(curve);
+            curve = new QuadCurve2D.Double(startX+5, startY, startX+5 + widthX/2.5d, startY+(heightY/2d), startX+5, (startY+heightY));
+            g2.draw(curve);
+            curve = new QuadCurve2D.Double(startX, startY, startX + widthX/2.5d, startY+(heightY/2d), startX, (startY+heightY));
+            g2.draw(curve);
+        }
+    },
 //    IMPLIES("->", (a, b) -> !a | b)
     ;
     String symbol;
@@ -418,7 +515,9 @@ enum BooleanOP {
         }
         return a;
     }
+    abstract void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY);
 }
+
 
 @FunctionalInterface
 interface BooleanStep {
