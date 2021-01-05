@@ -42,7 +42,7 @@ public class MemberXPData {
         return memberID;
     }
 
-    public String getMemberIDString() {
+    public String getMemberIdString() {
         return String.valueOf(memberID);
     }
 
@@ -54,7 +54,7 @@ public class MemberXPData {
         return numMessages;
     }
 
-    public long getGuildID() {
+    public long getGuildId() {
         return guildID;
     }
 
@@ -62,7 +62,7 @@ public class MemberXPData {
         return avatarURL;
     }
 
-    public String getGuildIDString() {
+    public String getGuildIdString() {
         return String.valueOf(guildID);
     }
 

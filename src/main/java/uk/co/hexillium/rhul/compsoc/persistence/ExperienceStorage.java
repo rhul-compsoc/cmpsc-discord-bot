@@ -9,13 +9,8 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildXPData;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.MemberXPData;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.sql.*;
+import java.util.*;
 
 public class ExperienceStorage {
 
@@ -63,6 +58,32 @@ update member_levels set xp_total = xp_total + ?, num_messages = num_messages + 
     private static final String updateMember = "update member_information set nickname = ?, username = ?, discrim = ?, avatar_url = ? where member_id = ? and guild_id = ?;";
     private static final String updateUser = "update member_information set username = ?, discrim = ?, avatar_url = ? where member_id = ?;";
 
+//    private static final String getMemberInfo = "" +
+//            "select mi.member_id as memberID, mi.guild_id as guildID, mi.avatar_url as avatarUrl, mi.nickname as nickname, mi.username as username, mi.discrim as discrim, " +
+//            "ml.xp_total as xpTotal, ml.recent_xp_gain as recentXpGain, coalesce(sv.student_verified, FALSE) as studentVerified " +
+//            "from member_information as mi,  member_levels as ml, " +
+//            "     (select student_verified from student_verification intern where intern.student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv " +
+//            "where mi.member_id = ? and mi.guild_id = ? and ml.member_id = ? and ml.guild_id = ?;";
+//    private static final String getMemberInfo = "" +
+//        "select mi.member_id as \"memberId\", mi.guild_id as \"guildId\", mi.avatar_url as \"avatarUrl\", mi.nickname as \"nickname\", mi.username as \"username\", mi.discrim as \"discrim\", " +
+//        "       ml.xp_total as \"xpTotal\", ml.recent_xp_gain as \"recentXpGain\", coalesce(sv.student_verified, FALSE) as \"studentVerified\" " +
+//        "from member_information as mi,  member_levels as ml, " +
+//        "     (select student_verified from student_verification intern where intern.student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv " +
+//        "where mi.member_id = ? and mi.guild_id = ? and ml.member_id = ? and ml.guild_id = ?;";
+//
+//    private static String getMemberInfo =
+//            "select mi.member_id as \"memberId\", mi.guild_id as \"guildId\", mi.avatar_url as \"avatarUrl\", mi.nickname as \"nickname\", mi.username as \"username\", mi.discrim as \"discrim\",\n" +
+//                    "       ml.xp_total as \"xpTotal\", ml.recent_xp_gain as \"recentXpGain\", coalesce(sv.student_verified, FALSE) as \"studentVerified\"\n" +
+//                    "    from member_information as mi,  member_levels as ml\n" +
+//                    "    left outer join (select student_verified, intern.student_discord_snowflake from student_verification intern where intern.student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv on sv.student_discord_snowflake = ml.member_id\n" +
+//                    "    where mi.member_id = ml.member_id and mi.guild_id = ml.guild_id and ml.member_id = ? and ml.guild_id = ?;";
+    private static String getMemberInfo = "select mi.member_id as \"memberId\", mi.guild_id as \"guildId\", mi.avatar_url as \"avatarUrl\", mi.nickname as \"nickname\", mi.username as \"username\", mi.discrim as \"discrim\",\n" +
+        "       ml.xp_total as \"xpTotal\", ml.recent_xp_gain as \"recentXpGain\", coalesce(sv.student_verified, FALSE) as \"studentVerified\"\n" +
+        "from member_information as mi--,  member_levels as ml\n" +
+        "         left outer join member_levels ml on mi.member_id = ml.member_id and mi.guild_id = ml.guild_id\n" +
+        "         left outer join (select student_verified, intern.student_discord_snowflake from student_verification intern where intern.student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv on sv.student_discord_snowflake = ml.member_id  \n" +
+        "where ml.member_id = ? and ml.guild_id = ?;";
+
     ExperienceStorage(HikariDataSource source){
         this.source = source;
     }
@@ -98,6 +119,39 @@ update member_levels set xp_total = xp_total + ?, num_messages = num_messages + 
         }
     }
      */
+
+    public Map<String, Object> getMemberInfo(long guildID, long memberID){
+
+        try (Connection connection = source.getConnection();
+             PreparedStatement statement = connection.prepareStatement(getMemberInfo) ) {
+
+            Map<String, Object> data = new HashMap<>();
+
+            statement.setLong(1, memberID);
+//            statement.setLong(2, memberID);
+            statement.setLong(2, guildID);
+//            statement.setLong(4, memberID);
+//            statement.setLong(5, guildID);
+
+            try (ResultSet set = statement.executeQuery()){
+                if (set.next()){
+                    ResultSetMetaData meta = set.getMetaData();
+                    for (int i = 1; i <= meta.getColumnCount(); i++){
+                        data.put(meta.getColumnLabel(i), set.getObject(i));
+                        if (set.getObject(i) instanceof Long){
+                            data.put(meta.getColumnLabel(i) + "_str", set.getObject(i).toString());
+                        }
+                    }
+                    return data;
+                }
+            }
+            return null;
+
+        } catch (SQLException ex){
+            logger.error("Failed to fetch member info...", ex);
+        }
+        return null;
+    }
 
     public GuildXPData getGuildData(long guildID, Guild guild){
         try (Connection connection = source.getConnection();

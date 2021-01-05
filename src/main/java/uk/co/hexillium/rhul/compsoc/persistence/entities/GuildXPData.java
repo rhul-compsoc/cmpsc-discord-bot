@@ -28,11 +28,11 @@ public class GuildXPData {
         return guildAvatar;
     }
 
-    public long getGuildID() {
+    public long getGuildId() {
         return guildID;
     }
 
-    public String getGuildIDString() {
+    public String getGuildIdString() {
         return String.valueOf(guildID);
     }
 }

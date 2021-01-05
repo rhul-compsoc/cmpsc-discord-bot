@@ -27,6 +27,7 @@ public class Register extends Command implements EventListener {
     private static final Pattern STUDENT_NUMBER_VERIFY = Pattern.compile("100\\d{6}");
     private static final long CHANNEL_ID = 768209780124418058L;
     private static final long VERIFIED_ROLE_ID = 768202524163047484L;
+    private static final long SERVER_MEMBER_ROLE_ID = 620613291844173844L;
 //    private static final long CHANNEL_ID = 751541795585785976L;
 //    private static final long VERIFIED_ROLE_ID = 768265402593574953L;
 
@@ -266,6 +267,8 @@ public class Register extends Command implements EventListener {
         if (event.getReactionEmote().getName().equals("✅")){
             Database.STUDENT_VERIFICATION.validateStudent(System.currentTimeMillis(), messageID, studentID -> {
                 event.getGuild().addRoleToMember(studentID, event.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
+                event.getGuild().addRoleToMember(studentID, event.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
+                // also give them the server_member role
                 event.getChannel().retrieveMessageById(messageID).queue(msg -> {
                     EmbedBuilder bld = new EmbedBuilder(msg.getEmbeds().get(0));
                     bld.setTitle("Approved Member");

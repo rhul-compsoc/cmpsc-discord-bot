@@ -14,8 +14,8 @@ import java.util.concurrent.Executors;
 
 public class Database {
 
-    private static Database instance = null;
-    private static Logger logger = LogManager.getLogger(Database.class);
+    private static final Logger logger = LogManager.getLogger(Database.class); //make sure the logger is declared first
+    private static Database instance = new Database(); //if the logger isn't declared first we get an NPE
     private static final int SQL_ATTEMPTS = 3;
     static ExecutorService dbPool = Executors.newFixedThreadPool(8);
 
@@ -27,18 +27,17 @@ public class Database {
     public static AuthTokenStorage AUTH_TOKEN_STORAGE;
     public static ExperienceStorage EXPERIENCE_STORAGE;
     public static TriviaStorage TRIVIA_STORAGE;
+    public static MessageStorage MESSAGE_STORAGE;
+    public static GameBindingStorage GAME_BINDING_STORAGE;
 
     public static Database getInstance(){
-        if (instance == null){
-            return new Database();
-        } else {
-            return instance;
-        }
+        return instance;
     }
 
     private Database(){
         instance = this;
         try {
+            logger.info("Connecting to database...");
             hikariConnect();
         } catch (IOException ex){
             logger.error("Database connection failed.");
@@ -68,6 +67,8 @@ public class Database {
         AUTH_TOKEN_STORAGE = new AuthTokenStorage(source);
         EXPERIENCE_STORAGE = new ExperienceStorage(source);
         TRIVIA_STORAGE = new TriviaStorage(source);
+        MESSAGE_STORAGE = new MessageStorage(source);
+        GAME_BINDING_STORAGE = new GameBindingStorage(source);
     }
 
     public HikariDataSource getSource(){
