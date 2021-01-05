@@ -2,6 +2,7 @@ package uk.co.hexillium.rhul.compsoc.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.MessageBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
@@ -18,10 +19,16 @@ import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.geom.Path2D;
 import java.awt.geom.QuadCurve2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -62,6 +69,26 @@ public class Trivia extends Command implements EventListener{
         jda.addEventListener(this);
     }
 
+    private void askAlgebra(Question newQ, TextChannel tc){
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(newQ.getImage(), "png", os);
+        } catch (IOException ex){
+            LOGGER.error("Failed to send image", ex);
+            return;
+        }
+        tc.sendMessage(askQuestion(newQ)).addFile(os.toByteArray(), "image.png").queue(msg -> {
+            lock.lock();
+            try {
+                makeSpace(tc);
+                this.question = newQ;
+                this.recentSentMessageID = msg.getIdLong();
+            } finally {
+                lock.unlock();
+            }
+        });
+    }
+
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
         if (genericEvent instanceof GuildMessageReceivedEvent){
@@ -79,20 +106,11 @@ public class Trivia extends Command implements EventListener{
                 LOGGER.error("Failed to find textchannel. Aborting");
                 return;
             }
-            Question question = genQuestion();
-            target.sendMessage(askQuestion(question)).queue(m -> {
-                lock.lock();
-                try {
-                    makeSpace(target);
-                    this.question = question;
-                    this.recentMessageSpawnID = event.getMessageIdLong();
-                    recentSentMessageID = m.getIdLong();
-                } finally {
-                    lock.unlock();
-                }
+            Database.runLater(() -> {
+                recentMessageSpawnID = event.getMessageIdLong();
+                Question question = genQuestion();
+                askAlgebra(question, target);
             });
-
-
         }
     }
 
@@ -120,7 +138,7 @@ public class Trivia extends Command implements EventListener{
             int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
             int finalPosition = Math.max(0, Math.min(maxPos, position));
 
-            Database.runLater(()-> {
+            Database.runLater(()-> { //don't run on the WS thread
                 List<TriviaScore> scores = Database.TRIVIA_STORAGE.fetchLeaderboard(finalPosition);
                 event.reply(getScores(scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10)+1));
             });
@@ -131,7 +149,8 @@ public class Trivia extends Command implements EventListener{
             builder.setTitle("Trivia/Boolean Algebra help");
             builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
                     "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
-                    "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.");
+                    "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
+                    "(https://rhul-compsoc.github.io/passport-client/#/guild/500612695570120704)[You can see the Scoreboard here, too.]");
             builder.addField("The Algebra Symbols:",
                     Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
                     + "\nNOT `¬`"
@@ -149,20 +168,14 @@ public class Trivia extends Command implements EventListener{
 
                     BooleanAlgebra balg = new BooleanAlgebra(depth, hardness, 0);
                     LOGGER.info("Manually spawned a new boolean problem with depth: " + depth + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
-                    Question newQ = new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg));
-                    if (newQ.getQuery().length() >= 2048){
-                        event.reply("Generated message was too long.");
-                        return;
-                    }
-                    event.getChannel().sendMessage(askQuestion(newQ)).queue(msg -> {
-                        lock.lock();
-                        try {
-                            makeSpace(event.getTextChannel());
-                            this.question = newQ;
-                            this.recentSentMessageID = msg.getIdLong();
-                        } finally {
-                            lock.unlock();
+                    Database.runLater(() -> { //don't run on WS thread
+
+                        Question newQ = new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg), balg.genImage());
+                        if (newQ.getQuery().length() >= 2048){
+                            event.reply("Generated message was too long.");
+                            return;
                         }
+                        askAlgebra(newQ, event.getTextChannel());
                     });
                     return;
 
@@ -216,14 +229,11 @@ public class Trivia extends Command implements EventListener{
         builder.setDescription(question.getQuery());
         builder.addField(String.format("You got %s%d point(s).", correct ? "" : "-", question.value), user.getAsMention() + " - the correct answer is " +
                 "||`" + question.getAnswer() + "`||", false);
+        builder.setImage("attachment://image.png");
 //        builder.setAuthor(user.getAsTag());
         textChannel.editMessageById(messageID, builder.build()).override(true).queue();
     }
 
-    private MessageEmbed ask(){
-        Question question = genQuestion();
-        return askQuestion(question);
-    }
 
     private MessageEmbed askQuestion(Question question){
         EmbedBuilder builder = new EmbedBuilder();
@@ -231,6 +241,7 @@ public class Trivia extends Command implements EventListener{
         builder.setTitle("Question!");
         builder.setDescription(question.getQuery());
         builder.setFooter("You can score " + question.getValue() + " point(s) by running `!t <answer>` and getting the answer correct.");
+        builder.setImage("attachment://image.png");
         return builder.build();
     }
 
@@ -285,7 +296,7 @@ public class Trivia extends Command implements EventListener{
             if (balg.toString().length() < 2048) invalid = false;
         }
         LOGGER.info("Automatically spawned a new boolean problem with depth: " + difficulty + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
-        return new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg));
+        return new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg), balg.genImage());
     }
 
     private int getScoreForBooleanAlgebra(BooleanAlgebra balg){
@@ -365,7 +376,7 @@ class BooleanAlgebra {
 
     public BufferedImage genImage(){
         if (nodes == null){
-            BufferedImage bim = new BufferedImage(100, 25, BufferedImage.TYPE_INT_RGB);
+            BufferedImage bim = new BufferedImage(100, 25, BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = (Graphics2D) bim.getGraphics();
             graphics.setColor(Color.WHITE);
             graphics.fillRect(0, 0, bim.getWidth(), bim.getHeight());
@@ -393,25 +404,35 @@ class BooleanAlgebra {
         }
         int totalHeight = images.stream().map(BufferedImage::getHeight).mapToInt(Integer::intValue).sum();
         int maxWidth = images.stream().map(BufferedImage::getWidth).mapToInt(Integer::intValue).max().orElse(0);
-        int width = 200;
-        BufferedImage bim = new BufferedImage(maxWidth + width, totalHeight, BufferedImage.TYPE_INT_RGB);
+        int width = totalHeight;
+        BufferedImage bim = new BufferedImage(maxWidth + width, totalHeight, BufferedImage.TYPE_INT_ARGB);
         width = (int) (0.8 * width);
         Graphics2D g2 = (Graphics2D) bim.getGraphics();
         g2.setColor(Color.WHITE);
         g2.fillRect(0, 0, bim.getWidth(), bim.getHeight());
         g2.setColor(Color.BLACK);
         int yOffset = 0;
+        int num = 0;
         for (BufferedImage imgs : images){
+            g2.setColor(Color.BLACK);
             g2.drawImage(imgs, maxWidth - imgs.getWidth(), yOffset, null);
+            if (yOffset > 0){
+//                g2.drawLine(0, yOffset, imgs.getWidth(), yOffset);
+            }
+            g2.setColor(num == 0 ? new Color(50, 0, 0, 50) : new Color(0, 0, 50, 50));
+            num = num == 0 ? 1 : 0;
+            //g2.fillRect(maxWidth - imgs.getWidth(), yOffset, imgs.getWidth(), imgs.getHeight());
+            g2.clearRect(0, yOffset, (maxWidth - imgs.getWidth()), imgs.getHeight());
             yOffset += imgs.getHeight();
         }
+        g2.setColor(Color.BLACK);
         stage.drawOp(g2, maxWidth, width , 0 + 2, totalHeight - 2);
         g2.setColor(Color.BLACK);
-        g2.drawLine(maxWidth + width, totalHeight/2, bim.getWidth(), totalHeight/2);
+        g2.drawLine(maxWidth + width, (totalHeight/2) + 1, bim.getWidth(), (totalHeight/2) + 1);
         if (notted){
-            g2.fillOval(maxWidth + width, totalHeight/2 - 4, 9, 9);
+            g2.fillOval(maxWidth + width, totalHeight/2 - 9, 19, 19);
             g2.setColor(Color.WHITE);
-            g2.fillOval(maxWidth + (width+1), totalHeight/2 - 3, 7, 7);
+            g2.fillOval(maxWidth + (width+1), totalHeight/2 - 8, 17, 17);
         }
         g2.dispose();
         return bim;
@@ -466,9 +487,13 @@ enum BooleanOP {
             g2.setColor(Color.BLACK);
             //vertical line for the and
             g2.drawLine(startX, startY, startX, startY + heightY - 1);
-
+            //extensions
+            g2.drawLine(startX, startY, startX + widthX/3, startY);
+            g2.drawLine(startX, startY + heightY - 1, startX + widthX/3, startY + heightY - 1);
             //curved end
-            g2.drawArc(startX - widthX, startY, 2 * widthX, heightY - 1, 270, 180);
+            g2.drawArc((startX - (2*widthX/3)) , startY, (2 * widthX) - (widthX/3), heightY - 1, 270, 180);
+
+            Path2D.Float path = new Path2D.Float();
         }
     },
     OR("∨", (a, b) -> a | b) {
@@ -527,13 +552,19 @@ interface BooleanStep {
 class Question {
     String query;
     Object answer;
+    BufferedImage image;
     int value;
 
 
     public Question(String query, Object answer, int value) {
+        this(query, answer, value, null);
+    }
+
+    public Question(String query, Object answer, int value, BufferedImage img) {
         this.query = query;
         this.answer = answer;
         this.value = value;
+        this.image = img;
     }
 
     public String getQuery() {
@@ -546,5 +577,13 @@ class Question {
 
     public int getValue(){
         return value;
+    }
+
+    public void setImage(BufferedImage image) {
+        this.image = image;
+    }
+
+    public BufferedImage getImage() {
+        return image;
     }
 }

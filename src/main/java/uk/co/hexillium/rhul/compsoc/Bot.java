@@ -6,6 +6,7 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.api.RestAPI;
 import uk.co.hexillium.rhul.compsoc.chat.ChatXP;
 import uk.co.hexillium.rhul.compsoc.handlers.InformationUpdateHandler;
+import uk.co.hexillium.rhul.compsoc.handlers.MessageAccumulator;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -44,7 +45,7 @@ public class Bot {
         RestAPI api = new RestAPI(6570, "api", jda, new ObjectMapper());
         ArrayList<String> argList = new ArrayList<>(Arrays.asList(args));
         if (argList.contains("-genToken")){
-            Database.AUTH_TOKEN_STORAGE.addAuthToken(System.currentTimeMillis() + 1000 * 60 * 60 * 24 * 365, "Year-long token", bytes -> {
+            Database.AUTH_TOKEN_STORAGE.addAuthToken(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365, "Year-long token", bytes -> {
                 logger.info("Super-secret token -> " + Base64.getEncoder().encodeToString(bytes));
             }, fail -> logger.error(fail.getMessage()));
         }
@@ -66,6 +67,7 @@ public class Bot {
         chatXP = new ChatXP(jda);
         jda.awaitReady();
         InformationUpdateHandler updateHandler = new InformationUpdateHandler(jda);
+        MessageAccumulator accumulator = new MessageAccumulator(jda);
         return jda;
     }
 
