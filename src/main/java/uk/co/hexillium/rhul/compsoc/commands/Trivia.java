@@ -150,7 +150,7 @@ public class Trivia extends Command implements EventListener{
             builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
                     "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
                     "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
-                    "(https://rhul-compsoc.github.io/passport-client/#/guild/500612695570120704)[You can see the Scoreboard here, too.]");
+                    "[https://passport.cmpsc.uk/](You can see the Scoreboard here, too.)");
             builder.addField("The Algebra Symbols:",
                     Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
                     + "\nNOT `¬`"
