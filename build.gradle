@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '4.0.4'
+    id 'com.github.johnrengelman.shadow' version '6.1.0'
 }
 
 
@@ -30,7 +30,7 @@ tasks.withType(JavaCompile) {
 dependencies {
     // https://mvnrepository.com/artifact/com.sparkjava/spark-core
     compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.3'
-    implementation 'net.dv8tion:JDA:4.2.0_225'
+    implementation 'net.dv8tion:JDA:4.2.0_227'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core
     implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.13.1'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-slf4j18-impl
