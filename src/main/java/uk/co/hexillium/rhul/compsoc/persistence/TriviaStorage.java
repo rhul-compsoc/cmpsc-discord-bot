@@ -25,9 +25,9 @@ public class TriviaStorage {
                     "order by score desc limit 10 offset ? ;";
 
     private final static String fetchUserPos =
-            "select member_snowflake, score, username, discrim, RANK() over(order by score desc) as rank from numvember " +
-                    "         left join member_information on member_snowflake = member_id " +
-                    "where member_snowflake = ? ;";
+            "select * from (select member_snowflake, score, username, discrim, RANK() over(order by score desc) as rank from numvember " +
+                    "         left join member_information on member_snowflake = member_id) as ranks" +
+                    " where ranks.member_snowflake = ? ;";
 
     private final static String totalPages = "select count(*) as count from numvember;";
 
@@ -59,7 +59,7 @@ public class TriviaStorage {
 
             try (ResultSet set = statement.executeQuery()){
                 while (set.next()){
-                    scores.add(new TriviaScore(set.getString("username") + "#" + set.getString("discrim"),
+                    scores.add(new TriviaScore(set.getLong("member_snowflake"), set.getString("username") + "#" + set.getString("discrim"),
                             set.getInt("score"),
                             set.getInt("rank")));
                 }
@@ -79,7 +79,7 @@ public class TriviaStorage {
 
             try (ResultSet set = statement.executeQuery()){
                 if (set.next()){
-                    return new TriviaScore(set.getString("username") + "#" + set.getString("discrim"),
+                    return new TriviaScore(set.getLong("member_snowflake"), set.getString("username") + "#" + set.getString("discrim"),
                             set.getInt("score"),
                             set.getInt("rank"));
                 }
