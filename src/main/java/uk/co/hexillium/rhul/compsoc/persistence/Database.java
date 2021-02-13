@@ -45,7 +45,13 @@ public class Database {
     }
 
     public static void runLater(Runnable runnable){
-        dbPool.submit(runnable);
+        dbPool.submit(() -> {
+            try {
+                runnable.run();
+            } catch (Exception ex){
+                logger.error("Error running DB pool submission", ex);
+            }
+        });
     }
 
     public void hikariConnect() throws IOException {
