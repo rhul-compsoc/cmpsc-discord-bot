@@ -2,14 +2,14 @@ package uk.co.hexillium.rhul.compsoc.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.MessageBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.GenericEvent;
-import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
+import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.utils.AttachmentOption;
 import net.dv8tion.jda.api.utils.TimeUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,23 +21,19 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.geom.Path2D;
 import java.awt.geom.QuadCurve2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.*;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -50,15 +46,32 @@ public class Trivia extends Command implements EventListener{
     private static final long channelID = 766050353174544384L;
     private long recentSentMessageID = -1L;
     private long recentMessageSpawnID = -1L;
-    private static final long cooldown = 90_000; // 1.5 mins
-    private static final long timeout = 60_000; // 1 min
+    private long cooldown = 90_000; // the current question's timer - default: 1.5 mins
+    private static final long minCooldown = 30_000; // the minimum coolown - used for quickly solved puzzles, and the base 0.5 min
+    private static final long cooldownMult = 40_000; // 40 sec || 0.66667 mins
     private final ReentrantLock lock = new ReentrantLock(false);
 
     private static final Pattern truthyRegex = Pattern.compile("(1|true|t|yes)", Pattern.CASE_INSENSITIVE);
     private static final Pattern falsyRegex = Pattern.compile("(0|false|f|no)", Pattern.CASE_INSENSITIVE);
 
+    private static final String[] trueReactions = {"✅"};
+    private static final List<String> trueReacts;
+    private static final String[] falseReactions = {"❌"};
+    private static final List<String> falseReacts;
+
+    static {
+        trueReacts = new ArrayList<String>();
+        Collections.addAll(trueReacts, trueReactions);
+        falseReacts = new ArrayList<String>();
+        Collections.addAll(falseReacts, falseReactions);
+    }
+
 
     private Question question;
+
+    private Question lastQuestion;
+    private boolean lastQuestionSolved = false;
+    private final Object lastQuestionSolverLock = new Object();
 
     public Trivia() {
         super("Trivia", "Answer questions to score points", "Answer questions to score points", commands , "fun");
@@ -82,6 +95,7 @@ public class Trivia extends Command implements EventListener{
             try {
                 makeSpace(tc);
                 this.question = newQ;
+                this.cooldown = minCooldown + (newQ.getValue() * cooldownMult);
                 this.recentSentMessageID = msg.getIdLong();
             } finally {
                 lock.unlock();
@@ -92,14 +106,18 @@ public class Trivia extends Command implements EventListener{
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
         if (genericEvent instanceof GuildMessageReceivedEvent){
-            if (Duration.between(OffsetDateTime.now(), TimeUtil.getTimeCreated(recentMessageSpawnID)).abs().toMillis() < cooldown) {
+            if (question != null && Duration.between(OffsetDateTime.now(), TimeUtil.getTimeCreated(recentMessageSpawnID)).abs().toMillis() < cooldown) {
                 // it hasn't been long enough yet.
+                return;
+            }
+            if (question == null && Duration.between(OffsetDateTime.now(), TimeUtil.getTimeCreated(recentMessageSpawnID)).abs().toMillis() < minCooldown){
+                // the current question _has_ been answered, but it hasn't been long enough to spawn a new one
                 return;
             }
             GuildMessageReceivedEvent event = (GuildMessageReceivedEvent) genericEvent;
             if (event.getChannel().getIdLong() == channelID) return; //don't spawn from things happening in the channel - it's just annoying.
             // we can spawn one in!
-            // let's do a 2/15 chance of that happening
+            // let's have a 2/15 chance of that happening
             if (randInclusive(1, 15) > 2) return;
             TextChannel target = event.getJDA().getTextChannelById(channelID);
             if (target == null){
@@ -111,6 +129,27 @@ public class Trivia extends Command implements EventListener{
                 Question question = genQuestion();
                 askAlgebra(question, target);
             });
+        } else if (genericEvent instanceof GuildMessageReactionAddEvent) {
+            if (question == null) return;
+            if (question.getAnswer() instanceof Boolean){
+                GuildMessageReactionAddEvent event = (GuildMessageReactionAddEvent) genericEvent;
+                if (recentMessageSpawnID != event.getMessageIdLong()) return;
+                event.getReaction().removeReaction(event.getUser()).queue();
+                if (!trueReacts.contains(event.getReactionEmote().getAsReactionCode()) &&
+                        !falseReacts.contains(event.getReactionEmote().getAsReactionCode())){
+                    return;
+                }
+                lock.lock();
+                try {
+                    boolean correct = (Boolean) question.getAnswer();
+                    boolean isRight = trueReacts.contains(event.getReactionEmote().getAsReactionCode()) == correct;
+                    Database.TRIVIA_STORAGE.updateMemberScore(event.getUser().getIdLong(), isRight ? question.getValue() : -1 * question.getValue());
+                    updateMessage(question, isRight, event.getUser(), recentSentMessageID, event.getChannel());
+                    this.question = null;
+                } finally {
+                    lock.unlock();
+                }
+            }
         }
     }
 
@@ -122,10 +161,11 @@ public class Trivia extends Command implements EventListener{
 
     @Override
     public void handleCommand(CommandEvent event) {
-        if (event.getTextChannel().getIdLong() != channelID){
+        if (event.getTextChannel().getIdLong() != channelID && event.getAuthor().getIdLong() != 187979032904728576L){
             event.reply("This isn't the right channel :/");
             return;
         }
+
         if (event.getCommand().equalsIgnoreCase("leaderboard") || event.getCommand().equalsIgnoreCase("lb")){
             int position = 0;
             if (event.getArgs().length == 1){
@@ -134,13 +174,15 @@ public class Trivia extends Command implements EventListener{
                 } catch (NumberFormatException ex){
                 }
             }
-            //leaderboards
-            int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
-            int finalPosition = Math.max(0, Math.min(maxPos, position));
 
+            int finalPosition1 = position;
             Database.runLater(()-> { //don't run on the WS thread
+                //leaderboards
+                int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
+                int finalPosition = Math.max(0, Math.min(maxPos, finalPosition1));
                 List<TriviaScore> scores = Database.TRIVIA_STORAGE.fetchLeaderboard(finalPosition);
-                event.reply(getScores(scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10)+1));
+                TriviaScore userScore = Database.TRIVIA_STORAGE.fetchUserScore(event.getAuthor().getIdLong());
+                event.reply(getScores(userScore, scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10)+1));
             });
             return;
         }
@@ -149,8 +191,9 @@ public class Trivia extends Command implements EventListener{
             builder.setTitle("Trivia/Boolean Algebra help");
             builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
                     "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
+                    "If you get a question wrong, you can use `!t solve` for the bot to work it out, and show you how to solve it.\n\n" +
                     "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
-                    "[https://passport.cmpsc.uk/](You can see the Scoreboard here, too.)");
+                    "[You can see the Scoreboard here, too.](https://passport.cmpsc.uk/)");
             builder.addField("The Algebra Symbols:",
                     Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
                     + "\nNOT `¬`"
@@ -159,23 +202,85 @@ public class Trivia extends Command implements EventListener{
             return;
         }
 
+        if (event.getArgs()[0].equalsIgnoreCase("solve")){
+            if (lastQuestion == null){
+                event.reply("Cannot find inactive question to solve");
+                return;
+            }
+            synchronized (lastQuestionSolverLock){
+                if (lastQuestionSolved){
+                    event.reply("I've already solved this");
+                    return;
+                }
+                lastQuestionSolved = true;
+                Database.runLater(() -> {
+                    BooleanAlgebra prev = lastQuestion.getBalg();
+                    prev.findSolution();
+                    prev.markSolution();
+                    ByteArrayOutputStream os = new ByteArrayOutputStream();
+                    try {
+                        ImageIO.write(prev.genImage(true), "png", os);
+                    } catch (IOException ex){
+                        LOGGER.error("Failed to send image", ex);
+                        return;
+                    }
+                    event.getTextChannel().sendMessage("Here's the solution, with " + prev.solution.getOperationCount() + " steps : ")
+                            .addFile(os.toByteArray(), "solution.png", AttachmentOption.SPOILER)
+                            .queue();
+                });
+                return;
+            }
+        }
+
         if (event.getAuthor().getIdLong() == 187979032904728576L){
-            if (event.getArgs().length == 4){
+            if (event.getFullArg().equalsIgnoreCase("debug")){
+                event.reply(String.format("recentSentMessageID: %d\n" +
+                        "recentMessageSpawnID: %d\n" +
+                        "cooldown: %d\n" +
+                        "minCooldown: %d\n" +
+                        "cooldownMult: %d\n" +
+                        "Lock State: %s\n", recentSentMessageID, recentMessageSpawnID, cooldown, minCooldown, cooldownMult, lock.toString()));
+            } else if (event.getArgs().length == 4){
                 if (event.getArgs()[0].equalsIgnoreCase("gen")){
                     String type = event.getArgs()[1];
                     int depth = Integer.parseInt(event.getArgs()[2]);
                     int hardness = Integer.parseInt(event.getArgs()[3]);
 
-                    BooleanAlgebra balg = new BooleanAlgebra(depth, hardness, 0);
-                    LOGGER.info("Manually spawned a new boolean problem with depth: " + depth + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
+                    BooleanAlgebra balg;
+                    if (type.equalsIgnoreCase("bool")) {
+                        balg = new BooleanAlgebra(depth, hardness, 0);
+                    } else {
+                        balg = new BooleanAlgebra(depth, hardness, 0, ThreadLocalRandom.current().nextBoolean());
+                    }
+                    LOGGER.info("Manually spawned a new boolean \"" + type + "\" problem with depth: " + depth + ", hardness:" + hardness + " operations: " + balg.getOperations() + "   and scores " + getScoreForBooleanAlgebra(balg));
                     Database.runLater(() -> { //don't run on WS thread
-
-                        Question newQ = new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg), balg.genImage());
-                        if (newQ.getQuery().length() >= 2048){
+                        if (balg.getOperations() > 2000){
+                            event.reply("This is far too long to generate :( op:" + balg.getOperations());
+                            return;
+                        }
+                        String quest = balg.toString();
+                        if (quest.length() > 2048){
+                            quest = balg.toCompactString();
+                        }
+                        int score = getScoreForBooleanAlgebra(balg);
+                        if (quest.length() < 2048){
+                            event.reply("Generating problem... (may take a while to create the image)\n"
+                            + "Op count: " + balg.getOperations() + ", scores: " + score);
+                        } else {
                             event.reply("Generated message was too long.");
                             return;
                         }
-                        askAlgebra(newQ, event.getTextChannel());
+                        try {
+                            balg.findSolution();
+                            balg.markSolution();
+                            Question newQ = new Question(quest, balg.getValue(), 0, balg.genImage(true), balg);
+                            //Question newQ = new Question(quest, balg.getValue(), score, balg.genImage(false));
+                            recentMessageSpawnID = event.getMessageIdLong();
+                            askAlgebra(newQ, event.getTextChannel());
+                        } catch (Exception ex){
+                            LOGGER.error("Failed to generate problem ", ex);
+                        }
+//
                     });
                     return;
 
@@ -195,7 +300,10 @@ public class Trivia extends Command implements EventListener{
                 return;
             }
             lock.lock();
+            //we're going into question-got-answered mode
             try {
+                this.lastQuestion = question;
+                this.lastQuestionSolved = false;
                 boolean correct = (Boolean) question.getAnswer();
                 boolean isRight = testAnswer(answer, correct);
                 Database.TRIVIA_STORAGE.updateMemberScore(event.getUser().getIdLong(), isRight ? question.getValue() : -1 * question.getValue());
@@ -227,7 +335,8 @@ public class Trivia extends Command implements EventListener{
         builder.setTitle((correct ? "Correct! " : "Incorrect! "));
 //        builder.setDescription(user.getAsMention() + "\n\n" + question.getQuery() + "\n\n" + "The correct answer is: `" + question.getAnswer() + "`");
         builder.setDescription(question.getQuery());
-        builder.addField(String.format("You got %s%d point(s).", correct ? "" : "-", question.value), user.getAsMention() + " - the correct answer is " +
+        String timeStr = " completed it in " + humanReadableFormat(Duration.between(Instant.now(), TimeUtil.getTimeCreated(messageID)).abs());
+        builder.addField(String.format("You got %s%d point(s).", correct ? "" : "-", question.value), user.getAsMention() + timeStr + " - the correct answer is " +
                 "||`" + question.getAnswer() + "`||", false);
         builder.setImage("attachment://image.png");
 //        builder.setAuthor(user.getAsTag());
@@ -245,18 +354,73 @@ public class Trivia extends Command implements EventListener{
         return builder.build();
     }
 
-    private MessageEmbed getScores(List<TriviaScore> scores, int page, int maxPages){
+    private static String humanReadableFormat(Duration duration) {
+        long days = duration.toDays();
+        long hrs = duration.toHours() - TimeUnit.DAYS.toHours(duration.toDays());
+        long mins = duration.toMinutes() - TimeUnit.HOURS.toMinutes(duration.toHours());
+        long secs = duration.getSeconds() - TimeUnit.MINUTES.toSeconds(duration.toMinutes());
+        long millis = duration.getNano() / 1_000_000;
+        StringBuilder strbld = new StringBuilder();
+        int count = 0;
+        if (millis > 0){
+            strbld.insert(0, millis + " ms" + (count > 0 ? (count > 1 ? ", " : " and ") : ""));
+            count++;
+        }
+        if (secs > 0){
+            strbld.insert(0, secs + " secs" + (count > 0 ? (count > 1 ? ", " : " and ") : ""));
+            count++;
+        }
+        if (mins > 0){
+            strbld.insert(0, mins + " mins" + (count > 0 ? (count > 1 ? ", " : " and ") : ""));
+            count++;
+        }
+        if (hrs > 0){
+            strbld.insert(0, hrs + " hours" + (count > 0 ? (count > 1 ? ", " : " and ") : ""));
+            count++;
+        }
+        if (days > 0){
+            strbld.insert(0, days + " days" + (count > 0 ? (count > 1 ? ", " : " and ") : ""));
+            count++;
+        }
+        return strbld.toString();
+    }
+
+    private MessageEmbed getScores(TriviaScore selfScore, List<TriviaScore> scores, int page, int maxPages){
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Leaderboard");
         StringBuilder strbld = new StringBuilder();
         strbld.append("Run `!leaderboard <pagenum>` to view the scores for that page");
+        strbld.append("\n");
+        strbld.append("You can also use the CompSoc passport to see the scores, [here](https://passport.cmpsc.uk/).");
         strbld.append("```\n");
         strbld.append("Rank | Score | Username ");
         strbld.append("\n");
         strbld.append("-------------------------------");
         strbld.append("\n");
+        boolean seenSelf = selfScore == null;
+        if (!seenSelf && selfScore.getPosition() <= scores.get(0).getPosition()){
+            if (!scores.contains(selfScore)){
+                strbld.append(String.format("% 4d | % 5d | You (%s)", selfScore.getPosition(), selfScore.getScore(), selfScore.getUserAsTag()));
+                strbld.append("\n");
+                strbld.append("-------------------------------");
+                strbld.append("\n");
+                seenSelf = true;
+            }
+        }
         for (TriviaScore tv : scores){
-            strbld.append(String.format("% 4d | % 5d | %s", tv.getPosition(), tv.getScore(), tv.getUserAsTag()));
+            if (!seenSelf && tv.getMemberId() == selfScore.getMemberId()){
+                strbld.append(String.format("% 4d | % 5d | You (%s)", tv.getPosition(), tv.getScore(), tv.getUserAsTag()));
+                strbld.append("\n");
+                seenSelf = true;
+            } else {
+                strbld.append(String.format("% 4d | % 5d | %s", tv.getPosition(), tv.getScore(), tv.getUserAsTag()));
+                strbld.append("\n");
+            }
+        }
+        if (!seenSelf){
+            strbld.append("-------------------------------");
+            strbld.append("\n");
+            strbld.append(String.format("% 4d | % 5d | You (%s)", selfScore.getPosition(), selfScore.getScore(), selfScore.getUserAsTag()));
             strbld.append("\n");
         }
         strbld.append("```");
@@ -293,10 +457,10 @@ public class Trivia extends Command implements EventListener{
             hardness = randInclusive(3, 7);
             hardness = randInclusive(2, hardness);
             balg = new BooleanAlgebra(difficulty, hardness, 0);
-            if (balg.toString().length() < 2048) invalid = false;
+            if (balg.toString().length() < 2048 || balg.toCompactString().length() < 2048) invalid = false;
         }
         LOGGER.info("Automatically spawned a new boolean problem with depth: " + difficulty + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
-        return new Question(balg.toString(), balg.getValue(), getScoreForBooleanAlgebra(balg), balg.genImage());
+        return new Question(balg.toString().length() < 2048 ? balg.toString() : balg.toCompactString(), balg.getValue(), getScoreForBooleanAlgebra(balg), balg.genImage(false), balg);
     }
 
     private int getScoreForBooleanAlgebra(BooleanAlgebra balg){
@@ -341,12 +505,35 @@ public class Trivia extends Command implements EventListener{
 
 }
 
+class Solution {
+    final int operationCount;
+    final boolean value;
+    final boolean shortCut;
+    int shortCutIndex;
+
+    public Solution(int operationCount, boolean value, boolean shortCut, int shortCutIndex) {
+        this.operationCount = operationCount;
+        this.value = value;
+        this.shortCut = shortCut;
+        this.shortCutIndex = shortCutIndex;
+    }
+
+    public int getOperationCount() {
+        return operationCount;
+    }
+
+    public boolean getValue() {
+        return value;
+    }
+}
+
 class BooleanAlgebra {
 
 
     //    BooleanAlgebra left;
 //    BooleanAlgebra right;
     BooleanAlgebra[] nodes;
+    Solution solution = null;
     BooleanOP stage;
 
     boolean value;
@@ -365,22 +552,190 @@ class BooleanAlgebra {
         nodes = new BooleanAlgebra[x];
         for (int i = 0; i < x; i++){
             nodes[i] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness/2)) + 1),
-                    hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel);
+                    hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel + 1);
         }
-        if (depth > 3 && currentLevel == 0){
+        if (depth > 3 && currentLevel < 2){
             stage = BooleanOP.XOR;
         } else {
             stage = BooleanOP.getRand();
         }
     }
 
-    public BufferedImage genImage(){
+    BooleanAlgebra(int depth, int hardness, int currentLevel, boolean requiredValue){
+
+        // pick if we not this or not
+        notted = ThreadLocalRandom.current().nextInt(10) >= 8; //80% I think. Maybe not.
+
+        this.value = requiredValue ^ notted;
+        if (depth < 0){
+            return;
+        }
+        //first, let's determine what type of gate we want
+        if (depth > 4 && currentLevel < 2){
+            stage = BooleanOP.XOR;
+        } else {
+            stage = BooleanOP.getRand();
+        }
+        //determine how many children this node should have
+        int x = ThreadLocalRandom.current().nextInt(2, Math.max(3, hardness + 2));
+        nodes = new BooleanAlgebra[x];
+
+        //generate all except the first term, depending on the type of gate
+        if (stage == BooleanOP.AND || stage == BooleanOP.OR) {
+            for (int i = 1; i < x; i++) {
+                nodes[i] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness / 2)) + 1),
+                        hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel + 1, stage == BooleanOP.AND);
+            }
+        } else {
+            for (int i = 1; i < x; i++) {
+                nodes[i] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness / 2)) + 1),
+                        hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel + 1, i % 2 == 0);
+            }
+        }
+
+        if (stage == BooleanOP.AND || stage == BooleanOP.OR) {
+            // generate the first element, this will be the deciding factor.
+            nodes[0] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness / 2)) + 1),
+                    hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel + 1, requiredValue ^ notted);
+        } else {
+            // generate the first element, this will be the deciding factor.
+            nodes[0] = new BooleanAlgebra(depth - (ThreadLocalRandom.current().nextInt(Math.max(2, hardness / 2)) + 1),
+                    hardness - ThreadLocalRandom.current().nextInt(0, 2), currentLevel + 1, (requiredValue ^ x % 2 == 0) ^ notted);
+        }
+
+
+        //put it somewhere randomly in this thing...
+        int swapIndex = ThreadLocalRandom.current().nextInt(x);
+        BooleanAlgebra temp = nodes[swapIndex];
+        nodes[swapIndex] = nodes[0];
+        nodes[0] = temp;
+    }
+
+    public void markSolution(){
+        markSolution(null, 0);
+    }
+
+    private void markSolution(BooleanAlgebra parent, int childIndex){
+        //the presence of the solution in the parent implies it is needed
+        if (this.nodes == null){
+            if (parent == null){ //if this is the top-level, then leave it alone
+                return;
+            }
+            if (parent.solution == null){
+                this.solution = null;
+                return;
+            }
+            int shortCut = parent.solution.shortCutIndex;
+            boolean markThis = shortCut < 0 || shortCut == childIndex;
+            if (!markThis) this.solution = null;
+            return;
+        }
+        if (parent != null && parent.solution == null){
+            this.solution = null;
+            BooleanAlgebra[] booleanAlgebras = this.nodes;
+            for (int i = 0; i < booleanAlgebras.length; i++) {
+                booleanAlgebras[i].markSolution(this, i);
+            }
+            return;
+        }
+        if (parent != null) {
+            int shortCut = parent.solution.shortCutIndex;
+            boolean markThis = shortCut < 0 || shortCut == childIndex;
+            if (!markThis) this.solution = null;
+        }
+        for (int i = 0; i < this.nodes.length; i++){
+            nodes[i].markSolution(this, i);
+        }
+    }
+
+    public void findSolution(){
+        this.solve();
+    }
+
+    private Solution solve(){
+        if (nodes == null || nodes.length == 0){
+            Solution s = new Solution((this.notted ? 2 : 1), this.value ^ this.notted, false, -1);
+            this.solution = s;
+            return s;
+        }
+        List<Solution> solveChildren = new ArrayList<>(nodes.length);
+        for (int i = 0; i < nodes.length; i++) {
+            BooleanAlgebra balg = nodes[i];
+            solveChildren.add(balg.solve());
+        }
+        int operations = 0;
+        boolean value = this.getValue();
+        int shortCutIndex = -1;
+        switch (this.stage){
+            case OR:
+                if (value ^ this.notted) { //then we need to find a single true
+                    boolean seen = false;
+                    int best = 0;
+                    int index = 0, bestIndex = 0;
+                    for (int i = 0; i < solveChildren.size(); i++) {
+                        Solution solveChild = solveChildren.get(i);
+                        if (solveChild.getValue()) {
+                            int i1 = solveChild.getOperationCount();
+                            if (!seen || i1 < best) {
+                                seen = true;
+                                best = i1;
+                                bestIndex = index;
+                            }
+                        }
+                        index++;
+                    }
+                    operations = seen ? best + 1 : 0;
+                    shortCutIndex = bestIndex;
+                } else {
+                    operations = solveChildren.stream().map(Solution::getOperationCount).mapToInt(i -> i).sum() + solveChildren.size();
+                }
+                break;
+            case AND:
+                if (!value ^ this.notted) { //need to find one false
+                    boolean seen = false;
+                    int best = 0;
+                    int index = 0, bestIndex = 0;
+                    for (int i = 0; i < solveChildren.size(); i++) {
+                        Solution solution = solveChildren.get(i);
+                        if (!solution.getValue()) {
+                            int i1 = solution.getOperationCount();
+                            if (!seen || i1 < best) {
+                                seen = true;
+                                best = i1;
+                                bestIndex = index;
+                            }
+                        }
+                        index++;
+                    }
+                    operations = seen ? best + 1 : 0;
+                    shortCutIndex = bestIndex;
+                } else {
+                    operations = solveChildren.stream().map(Solution::getOperationCount).mapToInt(i -> i).sum() + solveChildren.size();
+                }
+                break;
+            case XOR:
+                operations = solveChildren.stream().map(Solution::getOperationCount).mapToInt(i -> i).sum() + solveChildren.size();
+        }
+        Solution s = new Solution(operations, value, shortCutIndex >= 0, shortCutIndex);
+        this.solution = s;
+        return s;
+    }
+
+    public BufferedImage genImage(boolean drawSolution){
         if (nodes == null){
             BufferedImage bim = new BufferedImage(100, 25, BufferedImage.TYPE_INT_ARGB);
             Graphics2D graphics = (Graphics2D) bim.getGraphics();
             graphics.setColor(Color.WHITE);
             graphics.fillRect(0, 0, bim.getWidth(), bim.getHeight());
-            graphics.setColor(Color.BLACK);
+            if (drawSolution){
+                if (this.solution == null){
+                    graphics.setColor(new Color(100, 100, 100));
+                } else {
+                    graphics.setColor(this.solution.getValue() ? new Color(40, 170, 40) : new Color(170, 40, 40));
+                }
+            } else {
+                graphics.setColor(Color.BLACK);
+            }
             Font f = new Font("Courier New", Font.PLAIN, 15);
             graphics.setFont(f);
             String str = String.valueOf(value).toUpperCase();
@@ -400,7 +755,7 @@ class BooleanAlgebra {
         }
         List<BufferedImage> images = new ArrayList<>();
         for (BooleanAlgebra balg : nodes){
-            images.add(balg.genImage());
+            images.add(balg.genImage(drawSolution));
         }
         int totalHeight = images.stream().map(BufferedImage::getHeight).mapToInt(Integer::intValue).sum();
         int maxWidth = images.stream().map(BufferedImage::getWidth).mapToInt(Integer::intValue).max().orElse(0);
@@ -425,14 +780,23 @@ class BooleanAlgebra {
             g2.clearRect(0, yOffset, (maxWidth - imgs.getWidth()), imgs.getHeight());
             yOffset += imgs.getHeight();
         }
-        g2.setColor(Color.BLACK);
+        if (drawSolution){
+            if (this.solution == null){
+                g2.setColor(new Color(100, 100, 100));
+            } else {
+                g2.setColor(this.solution.getValue() ? new Color(40, 170, 40) : new Color(170, 40, 40));
+            }
+        } else {
+            g2.setColor(Color.BLACK);
+        }
         stage.drawOp(g2, maxWidth, width , 0 + 2, totalHeight - 2);
-        g2.setColor(Color.BLACK);
+//        g2.setColor(Color.BLACK);
         g2.drawLine(maxWidth + width, (totalHeight/2) + 1, bim.getWidth(), (totalHeight/2) + 1);
         if (notted){
-            g2.fillOval(maxWidth + width, totalHeight/2 - 9, 19, 19);
+            int notSize = (int) (2 * Math.max(5d, width / 10d));
+            g2.fillOval(maxWidth + width, totalHeight/2 - (notSize/2), notSize, notSize);
             g2.setColor(Color.WHITE);
-            g2.fillOval(maxWidth + (width+1), totalHeight/2 - 8, 17, 17);
+            g2.fillOval(maxWidth + (width+1), (totalHeight / 2) - (notSize / 2) + 1, (notSize) - 2, (notSize) - 2);
         }
         g2.dispose();
         return bim;
@@ -478,13 +842,32 @@ class BooleanAlgebra {
             return strbld.toString();
         }
     }
+
+    public String toCompactString(){
+        if (nodes == null){
+            return (notted ? "¬" : "") + String.valueOf(value).toUpperCase().charAt(0);
+        } else {
+            StringBuilder strbld = new StringBuilder();
+            if (notted) strbld.append("¬");
+            strbld.append("(");
+            strbld.append(nodes[0].toCompactString());
+            for (int i = 1; i < nodes.length; i++){
+                strbld.append(stage.symbol);
+                strbld.append(nodes[i].toCompactString());
+            }
+            strbld.append(")");
+            return strbld.toString();
+        }
+    }
 }
 
 enum BooleanOP {
     AND("∧", (a, b) -> a & b){
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-            g2.setColor(Color.BLACK);
+            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
+
+//            g2.setColor(Color.BLACK);
             //vertical line for the and
             g2.drawLine(startX, startY, startX, startY + heightY - 1);
             //extensions
@@ -493,12 +876,19 @@ enum BooleanOP {
             //curved end
             g2.drawArc((startX - (2*widthX/3)) , startY, (2 * widthX) - (widthX/3), heightY - 1, 270, 180);
 
-            Path2D.Float path = new Path2D.Float();
+            g2.setStroke(new BasicStroke(1));
+
+
+//            int centrex = (int) (startX + (0.5 * widthX));
+//            int centrey = (int) (startY + (0.5 * heightY));
+//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
+//            g2.drawString("AND", centrex, centrey);
         }
     },
     OR("∨", (a, b) -> a | b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
+            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
 
             QuadCurve2D curve = new QuadCurve2D.Double(startX, startY, startX + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
             g2.draw(curve);
@@ -506,20 +896,36 @@ enum BooleanOP {
             g2.draw(curve);
             curve = new QuadCurve2D.Double(startX, startY, startX + widthX/2.5d, startY+(heightY/2d), startX, (startY+heightY));
             g2.draw(curve);
+            g2.setStroke(new BasicStroke(1));
+
+
+//            int centrex = (int) (startX + (0.5 * widthX));
+//            int centrey = (int) (startY + (0.5 * heightY));
+//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
+//            g2.drawString("OR", centrex, centrey);
         }
     },
     XOR("⊕", (a, b) -> a ^ b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
+            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
 
-            QuadCurve2D curve = new QuadCurve2D.Double(startX+5, startY, startX+5 + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
+            QuadCurve2D curve = new QuadCurve2D.Double(startX+(widthX/10d), startY, startX+5 + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
             g2.draw(curve);
-            curve = new QuadCurve2D.Double(startX+5, startY + heightY, startX + (2*widthX/3d), (startY+heightY) - (heightY/10d), startX + widthX - 1, (startY+heightY) - heightY/2d);
+            curve = new QuadCurve2D.Double(startX+(widthX/10d), startY + heightY, startX + (2*widthX/3d), (startY+heightY) - (heightY/10d), startX + widthX - 1, (startY+heightY) - heightY/2d);
             g2.draw(curve);
-            curve = new QuadCurve2D.Double(startX+5, startY, startX+5 + widthX/2.5d, startY+(heightY/2d), startX+5, (startY+heightY));
+            curve = new QuadCurve2D.Double(startX+(widthX/10d), startY, startX+(widthX/10d) + widthX/2.5d, startY+(heightY/2d), startX+(widthX/10d), (startY+heightY));
             g2.draw(curve);
+
+            //the extra line that an OR doesn't have
             curve = new QuadCurve2D.Double(startX, startY, startX + widthX/2.5d, startY+(heightY/2d), startX, (startY+heightY));
             g2.draw(curve);
+            g2.setStroke(new BasicStroke(1));
+//
+//            int centrex = (int) (startX + (0.5 * widthX));
+//            int centrey = (int) (startY + (0.5 * heightY));
+//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
+//            g2.drawString("XOR", centrex, centrey);
         }
     },
 //    IMPLIES("->", (a, b) -> !a | b)
@@ -555,16 +961,18 @@ class Question {
     BufferedImage image;
     int value;
 
+    BooleanAlgebra balg;
 
-    public Question(String query, Object answer, int value) {
-        this(query, answer, value, null);
-    }
-
-    public Question(String query, Object answer, int value, BufferedImage img) {
+    public Question(String query, Object answer, int value, BufferedImage img, BooleanAlgebra balg) {
+        this.balg = balg;
         this.query = query;
         this.answer = answer;
         this.value = value;
         this.image = img;
+    }
+
+    public BooleanAlgebra getBalg() {
+        return balg;
     }
 
     public String getQuery() {
