@@ -37,7 +37,7 @@ public class CommandEvent {
     public CommandEvent(PrivateMessageReceivedEvent event) {
         isGuildMessage = false;
         privateChannel = event.getChannel();
-        common(event.getMessage().getContentRaw());
+        common(event.getMessage().getContentRaw(), CommandDispatcher.defaultCommandDelimiter);
         privateMEvent = event;
         this.message = event.getMessage();
     }
@@ -45,7 +45,7 @@ public class CommandEvent {
     public CommandEvent(GuildMessageReceivedEvent event, GuildSettings settings) {
         isGuildMessage = true;
         textChannel = event.getChannel();
-        common(event.getMessage().getContentRaw());
+        common(event.getMessage().getContentRaw(), settings.getPrefix());
         this.message = event.getMessage();
         this.guildEvent = event;
     }
@@ -54,9 +54,9 @@ public class CommandEvent {
      * Common splits between guild and private messages
      * @param message The message that is common between them
      */
-    private void common(String message) {
+    private void common(String message, String prefix) {
         String[] a = message.split("\\s+");
-        command = a[0];
+        command = a[0].substring(prefix.length());
         args = new String[a.length - 1];
         System.arraycopy(a, 1, args, 0, args.length);
         fullText = message;
@@ -151,6 +151,16 @@ public class CommandEvent {
     @Nonnull
     public String getFullText() {
         return fullText;
+    }
+
+    /**
+     * Gets the full String content of the argument.
+     *
+     * @return the argument String, (not including the prefix and command).
+     */
+    @Nonnull
+    public String getFullArg() {
+        return fullArg;
     }
 
     /**
@@ -345,6 +355,16 @@ public class CommandEvent {
      */
     public void reply(@Nonnull String message, @Nonnull MessageEmbed embed, Consumer<? super Message> success) {
         sendMessage(getChannel(), message, embed, success, null);
+    }
+
+    /**
+     * Sends a String and {@link MessageEmbed} reply to the origin channel.
+     * This method will <b>not</b> split the message up if it is too long
+     *
+     * @param message the string to send
+     */
+    public void reply(@Nonnull String message, @Nonnull MessageEmbed embed) {
+        sendMessage(getChannel(), message, embed, null, null);
     }
 
     /**

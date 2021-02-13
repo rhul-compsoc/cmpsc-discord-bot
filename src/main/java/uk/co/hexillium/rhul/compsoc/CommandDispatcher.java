@@ -16,6 +16,7 @@ import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -23,14 +24,16 @@ import java.util.stream.Stream;
 
 public class CommandDispatcher {
 
-    private final static String defaultCommandDelimiter = "!";
+    public final static String defaultCommandDelimiter = "!";
 
     final static Logger logger = LogManager.getLogger(CommandDispatcher.class);
 
     private List<Command> commands;
+    private HashMap<String, Command> triggerMap;
 
     public CommandDispatcher() {
         this.commands = new ArrayList<>();
+        this.triggerMap = new HashMap<>();
 
         String pkg = "uk.co.hexillium.rhul.compsoc.commands";
         try (ScanResult scanResult =
@@ -49,6 +52,12 @@ public class CommandDispatcher {
                         NoSuchMethodException | IllegalArgumentException e) {
                     logger.error("Failed to instantiate command " + routeClassInfo.loadClass().getName() + ", " + e.getMessage());
                 }
+            }
+        }
+
+        for (Command command : commands){
+            for (String trigger : command.getCommands()){
+                triggerMap.put(trigger, command);
             }
         }
     }
@@ -72,14 +81,11 @@ public class CommandDispatcher {
             if (message.startsWith(delim)) {
                 String[] args = message.split("\\s+");
                 String command = args[0].substring(defaultCommandDelimiter.length());
-                List<Command> triggers = getCommandsForTrigger(command, true);
-                if (triggers.size() == 0) return;
-                logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild commands " + triggers.stream().map(c -> c.getClass().getSimpleName()).collect(Collectors.joining(" ")));
-                for (Command cmd : triggers) {
-                    CommandEvent cmdE = new CommandEvent(event, settings);
-                    cmd.internalHandleCommand(cmdE);
-                }
-
+                Command toRun = findCommand(command, true);
+                if (toRun == null) return;
+                logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild command " + command + " with args " + Arrays.toString(args));
+                CommandEvent cmdE = new CommandEvent(event, settings);
+                toRun.internalHandleCommand(cmdE);
             }
         });
 
@@ -95,6 +101,12 @@ public class CommandDispatcher {
         Database.GUILD_DATA.fetchData(guildID, settings, null);
     }
 
+    private Command findCommand(String trigger, boolean guildCommand){
+        Command command = triggerMap.get(trigger);
+        if (command == null) return null;
+        return !command.requireGuild() || guildCommand ? command : null;
+    }
+
     private List<Command> getCommandsForTrigger(String trigger, boolean guildCommand) {
         return commands.stream().filter(c -> guildCommand || !c.requireGuild()).filter(c -> Stream.of(c.getCommands()).anyMatch(trigger::equalsIgnoreCase)).collect(Collectors.toList());
     }
@@ -105,13 +117,11 @@ public class CommandDispatcher {
         String[] args = message.split("\\s+");
         String command = args[0].substring(defaultCommandDelimiter.length());
         Database.runLater(() -> {
-            List<Command> triggers = getCommandsForTrigger(command, false);
-            if (triggers.size() == 0) return;
-            logger.info(event.getAuthor().getAsTag() + " ran private commands " + triggers.stream().map(c -> c.getClass().getSimpleName()).collect(Collectors.joining(" ")));
-            for (Command cmd : triggers) {
-                CommandEvent cmdE = new CommandEvent(event);
-                cmd.internalHandleCommand(cmdE);
-            }
+            Command toRun = findCommand(command, false);
+            if (toRun == null) return;
+            logger.info("[DMs/user: " + event.getAuthor().getAsTag() + "] ran private command " + command + " with args " + Arrays.toString(args));
+            CommandEvent cmdE = new CommandEvent(event);
+            toRun.internalHandleCommand(cmdE);
         });
 
     }
