@@ -1,8 +1,10 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -81,7 +83,7 @@ update member_levels set xp_total = xp_total + ?, num_messages = num_messages + 
         "       ml.xp_total as \"xpTotal\", ml.recent_xp_gain as \"recentXpGain\", coalesce(sv.student_verified, FALSE) as \"studentVerified\"\n" +
         "from member_information as mi--,  member_levels as ml\n" +
         "         left outer join member_levels ml on mi.member_id = ml.member_id and mi.guild_id = ml.guild_id\n" +
-        "         left outer join (select student_verified, intern.student_discord_snowflake from student_verification intern where intern.student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv on sv.student_discord_snowflake = ml.member_id  \n" +
+        "         left outer join (select student_verified, intern.student_discord_snowflake from student_verification intern where student_discord_snowflake = ? order by student_details_submitted desc limit 1) as sv on sv.student_discord_snowflake = ml.member_id  \n" +
         "where ml.member_id = ? and ml.guild_id = ?;";
 
     ExperienceStorage(HikariDataSource source){
@@ -128,8 +130,9 @@ update member_levels set xp_total = xp_total + ?, num_messages = num_messages + 
             Map<String, Object> data = new HashMap<>();
 
             statement.setLong(1, memberID);
+            statement.setLong(2, memberID);
 //            statement.setLong(2, memberID);
-            statement.setLong(2, guildID);
+            statement.setLong(3, guildID);
 //            statement.setLong(4, memberID);
 //            statement.setLong(5, guildID);
 
