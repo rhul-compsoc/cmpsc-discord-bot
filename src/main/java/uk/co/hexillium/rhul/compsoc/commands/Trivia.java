@@ -133,6 +133,7 @@ public class Trivia extends Command implements EventListener{
             if (question == null) return;
             if (question.getAnswer() instanceof Boolean){
                 GuildMessageReactionAddEvent event = (GuildMessageReactionAddEvent) genericEvent;
+                if (event.getChannel().getIdLong() != channelID) return;
                 if (recentMessageSpawnID != event.getMessageIdLong()) return;
                 event.getReaction().removeReaction(event.getUser()).queue();
                 if (!trueReacts.contains(event.getReactionEmote().getAsReactionCode()) &&
@@ -302,13 +303,17 @@ public class Trivia extends Command implements EventListener{
             lock.lock();
             //we're going into question-got-answered mode
             try {
-                this.lastQuestion = question;
-                this.lastQuestionSolved = false;
-                boolean correct = (Boolean) question.getAnswer();
-                boolean isRight = testAnswer(answer, correct);
-                Database.TRIVIA_STORAGE.updateMemberScore(event.getUser().getIdLong(), isRight ? question.getValue() : -1 * question.getValue());
-                updateMessage(question, isRight, event.getUser(), recentSentMessageID, event.getTextChannel());
-                this.question = null;
+                if (this.question == null){
+                    event.reply("You got beaten to it. Very close, because the only thing that saved this from duplicating was the locking mechanism.");
+                } else {
+                    this.lastQuestion = question;
+                    this.lastQuestionSolved = false;
+                    boolean correct = (Boolean) question.getAnswer();
+                    boolean isRight = testAnswer(answer, correct);
+                    Database.TRIVIA_STORAGE.updateMemberScore(event.getUser().getIdLong(), isRight ? question.getValue() : -1 * question.getValue());
+                    updateMessage(question, isRight, event.getUser(), recentSentMessageID, event.getTextChannel());
+                    this.question = null;
+                }
             } finally {
                 lock.unlock();
             }
