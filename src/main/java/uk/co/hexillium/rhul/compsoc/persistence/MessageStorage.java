@@ -1,10 +1,13 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
+import net.dv8tion.jda.api.entities.GuildChannel;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageType;
+import net.dv8tion.jda.api.entities.TextChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.intellij.lang.annotations.Language;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -19,16 +22,49 @@ public class MessageStorage {
     private HikariDataSource source;
     private static final Logger logger = LogManager.getLogger(MessageStorage.class);
 
+    @Language("SQL")
     private static final String insertMessage =
             "insert into messages(channel_id, message_id, modified_timestamp, author_id, message_content, attachment_url) VALUES " +
                     "(?, ?, ?, ?, ?, ?) on conflict do nothing;";
 
+    @Language("SQL")
     private static final String deleteMessage =
             "update messages set deleted = true where message_id = ? and modified_timestamp = (select max(modified_timestamp) from messages where message_id = ?)";
 
+    @Language("SQL")
+    private static final String insertChannel = "insert into channels (channel_snowflake, channel_name, channel_permissions, channel_description) values (?, ?, ?, ?) on conflict do nothing;";
+
+    @Language("SQL")
+    private static final String updateChannel = "update channels set channel_name = ? where channel_snowflake = ?;";
 
     MessageStorage(HikariDataSource source){
         this.source = source;
+    }
+
+    public void insertChannel(TextChannel channel){
+        try (Connection conn = source.getConnection()){
+            PreparedStatement ps = conn.prepareStatement(insertChannel);
+            ps.setLong(1, channel.getIdLong());
+            ps.setString(2, channel.getName());
+            ps.setLong(3, 0);
+            ps.setString(4, channel.getTopic());
+
+            ps.executeUpdate();
+        } catch (SQLException ex){
+            logger.warn("Failed to insert Channel", ex);
+        }
+    }
+
+    public void updateChannel(TextChannel tc){
+        try (Connection conn = source.getConnection()){
+            PreparedStatement ps = conn.prepareStatement(updateChannel);
+            ps.setString(1, tc.getName());
+            ps.setLong(2, tc.getIdLong());
+
+            ps.executeUpdate();
+        } catch (SQLException ex){
+            logger.warn("Failed to update Channel", ex);
+        }
     }
 
     public void insertMessage(Message message){
@@ -84,7 +120,7 @@ public class MessageStorage {
         statement.setLong(3, Timestamp.valueOf(LocalDateTime.ofInstant(message.getTimeEdited() != null ?
                         message.getTimeEdited().toInstant() : message.getTimeCreated().toInstant(),
                 ZoneOffset.UTC)).getTime());
-        statement.setLong(4, message.getType() == MessageType.DEFAULT ? message.getAuthor().getIdLong() : -1);
+        statement.setLong(4, !message.getType().isSystem() ? message.getAuthor().getIdLong() : -1);
         statement.setString(5, message.getContentRaw());
         statement.setString(6, message.getAttachments().size() > 0 ? message.getAttachments().get(0).getUrl() : null);
     }

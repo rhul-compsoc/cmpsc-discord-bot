@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.events.ReadyEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
 
 import javax.annotation.Nonnull;
 
@@ -31,6 +32,10 @@ public class EventManager implements EventListener{
         if (event instanceof PrivateMessageReceivedEvent){
             if (dispatcher != null)
                 dispatcher.dispatchCommand((PrivateMessageReceivedEvent) event);
+        }
+        if (event instanceof ButtonInteraction){
+            if (dispatcher != null)
+                dispatcher.dispatchButtonPress((ButtonInteraction) event);
         }
     }
 }

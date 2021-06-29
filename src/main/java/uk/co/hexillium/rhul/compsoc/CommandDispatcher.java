@@ -3,7 +3,10 @@ package uk.co.hexillium.rhul.compsoc;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
+import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
+import uk.co.hexillium.rhul.compsoc.commands.ButtonHandler;
 import uk.co.hexillium.rhul.compsoc.commands.Command;
+import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
@@ -13,11 +16,15 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
+import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,10 +37,15 @@ public class CommandDispatcher {
 
     private List<Command> commands;
     private HashMap<String, Command> triggerMap;
+    private HashMap<String, ButtonHandler> buttonMap;
+    private List<ButtonHandler> buttons;
+    private final HMAC hmac;
 
-    public CommandDispatcher() {
+    public CommandDispatcher() throws NoSuchAlgorithmException {
         this.commands = new ArrayList<>();
         this.triggerMap = new HashMap<>();
+
+        buttons = new ArrayList<>();
 
         String pkg = "uk.co.hexillium.rhul.compsoc.commands";
         try (ScanResult scanResult =
@@ -44,13 +56,24 @@ public class CommandDispatcher {
                              .scan()) {
             System.out.println(scanResult.getAllClasses().toString());
             for (ClassInfo routeClassInfo : scanResult.getSubclasses(pkg + ".Command")
+                    .union(scanResult.getSubclasses(pkg + ".ButtonHandler"))
                     .exclude(scanResult.getClassesWithAnnotation("uk.co.hexillium.rhul.compsoc.Disabled"))) {
                 try {
-                    this.commands.add((Command) routeClassInfo.loadClass().getDeclaredConstructor().newInstance());
-                    logger.info("Loaded command " + routeClassInfo.loadClass().getName());
+                    Class<?> current = routeClassInfo.loadClass();
+                    Object newInst = current.getDeclaredConstructor().newInstance();
+                    logger.info("Inspecting " + current.getName() + " to load");
+                    if (newInst instanceof ButtonHandler){
+                        buttons.add((ButtonHandler) newInst);
+                        logger.info("Loading Button Handler " + current.getName());
+                    }
+                    if (newInst instanceof Command){
+                        this.commands.add((Command) newInst);
+                        logger.info("Loading Command Handler " + current.getName());
+                    }
+                    logger.info("Loaded " + routeClassInfo.loadClass().getName());
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
                         NoSuchMethodException | IllegalArgumentException e) {
-                    logger.error("Failed to instantiate command " + routeClassInfo.loadClass().getName() + ", " + e.getMessage());
+                    logger.error("Failed to instantiate handler " + routeClassInfo.loadClass().getName() + ".", e);
                 }
             }
         }
@@ -60,11 +83,51 @@ public class CommandDispatcher {
                 triggerMap.put(trigger, command);
             }
         }
+
+        for (ButtonHandler handler : buttons){
+            for (String trigger : handler.registerHandles()){
+                this.buttonMap.put(trigger, handler);
+            }
+        }
+
+        byte[] sk = new byte[1];
+        try {
+            sk = getHMACSecretKey();
+        } catch (IOException e) {
+            logger.error("Failed to initialise key for HMAC.  Expect buttons to be impacted.");
+        }
+        hmac = new HMAC(sk);
+
     }
+
+    private byte[] getHMACSecretKey() throws IOException {
+        //check if a keyfile exists
+        File keyFile = new File("keyfile.bin");
+        if (keyFile.exists()){
+            return Files.readAllBytes(Path.of("keyfile.bin"));
+        }
+        Random secureRandom;
+        try {
+            secureRandom = SecureRandom.getInstanceStrong();
+        } catch (NoSuchAlgorithmException e) {
+            secureRandom = new Random();
+        }
+        byte[] secretKey = new byte[32];
+        secureRandom.nextBytes(secretKey);
+
+        //save it
+        Files.write(Path.of("keyfile.bin"), secretKey);
+
+        return secretKey;
+    }
+
 
     public void onLoad(JDA jda) {
         for (Command c : commands) {
             c.onLoad(jda, this);
+        }
+        for (ButtonHandler handler : buttons){
+            handler.initButtonHandle(hmac, jda);
         }
     }
     public void loadScheduler(JobScheduler scheduler) {
@@ -139,4 +202,25 @@ public class CommandDispatcher {
     }
 
 
+    public void dispatchButtonPress(ButtonInteraction event) {
+        //perform HMAC check:
+        String comp = event.getComponentId();
+        if (comp.length() <= 23){
+            event.reply("Failed interaction; component not long enough to contain a valid MAC.").setEphemeral(true).queue();
+            return;
+        }
+        String hmac_str = comp.substring(comp.length() - 23);
+        String usr = comp.substring(0, comp.length() - 23);
+        boolean memberLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), event.getUser().getIdLong(), event.getChannel().getIdLong());
+        boolean channelLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), 0, event.getChannel().getIdLong());
+
+        if (!memberLock && !channelLock){
+            // this interaction dies here, and is dropped due to being faulty.
+            logger.warn("Attempted interaction forgery, or HMAC error. From " + event.getUser() + " with content: " + event.getComponentId());
+            return;
+        }
+        String[] components = usr.split("\\|");
+        buttonMap.get(components[0]).handleButtonInteraction(event, memberLock);
+
+    }
 }

@@ -2,20 +2,22 @@ package uk.co.hexillium.rhul.compsoc.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.TextChannel;
-import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
 import net.dv8tion.jda.api.utils.AttachmentOption;
 import net.dv8tion.jda.api.utils.TimeUtil;
+import net.dv8tion.jda.internal.utils.PermissionUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
+import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
@@ -37,11 +39,14 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class Trivia extends Command implements EventListener{
+public class Trivia extends Command implements EventListener, ButtonHandler{
 
     private static final Logger LOGGER = LogManager.getLogger(Trivia.class);
 
     private static final String[] commands = {"t", "triv", "trivia", "leaderboard", "lb"};
+    private static final String[] buttonPrefix = {"c:tr"}; //command:trivia -- these will come in the form of c:tr|1/0<HMAC>
+
+    private  HMAC hmac;
 
     private static final long channelID = 766050353174544384L;
     private long recentSentMessageID = -1L;
@@ -66,6 +71,11 @@ public class Trivia extends Command implements EventListener{
         Collections.addAll(falseReacts, falseReactions);
     }
 
+
+    boolean canConnect(Member member, VoiceChannel vc){
+        boolean hasPerm = PermissionUtil.checkPermission(vc, member, Permission.VOICE_CONNECT);
+        return hasPerm && (vc.getUserLimit() == 0 || PermissionUtil.checkPermission(vc, member, Permission.MANAGE_CHANNEL) || vc.getUserLimit() < vc.getMembers().size());
+    }
 
     private Question question;
 
@@ -104,6 +114,21 @@ public class Trivia extends Command implements EventListener{
     }
 
     @Override
+    public void initButtonHandle(HMAC hmac, JDA jda) {
+
+    }
+
+    @Override
+    public void handleButtonInteraction(ButtonInteraction interaction, boolean userLockedHMAC) {
+
+    }
+
+    @Override
+    public List<String> registerHandles() {
+        return null;
+    }
+
+    @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
         if (genericEvent instanceof GuildMessageReceivedEvent){
             if (question != null && Duration.between(OffsetDateTime.now(), TimeUtil.getTimeCreated(recentMessageSpawnID)).abs().toMillis() < cooldown) {
@@ -116,6 +141,7 @@ public class Trivia extends Command implements EventListener{
             }
             GuildMessageReceivedEvent event = (GuildMessageReceivedEvent) genericEvent;
             if (event.getChannel().getIdLong() == channelID) return; //don't spawn from things happening in the channel - it's just annoying.
+            if (event.getChannel().getIdLong() == 848237918471454720L) return; //don't spawn from things happening in the logs channel - it's just annoying.
             // we can spawn one in!
             // let's have a 2/15 chance of that happening
             if (randInclusive(1, 15) > 2) return;
@@ -461,7 +487,7 @@ public class Trivia extends Command implements EventListener{
             difficulty = randInclusive(1, difficulty);
             hardness = randInclusive(3, 7);
             hardness = randInclusive(2, hardness);
-            balg = new BooleanAlgebra(difficulty, hardness, 0);
+            balg = new BooleanAlgebra(difficulty, hardness, 0, ThreadLocalRandom.current().nextBoolean());
             if (balg.toString().length() < 2048 || balg.toCompactString().length() < 2048) invalid = false;
         }
         LOGGER.info("Automatically spawned a new boolean problem with depth: " + difficulty + ", hardness:" + hardness + " and scores " + getScoreForBooleanAlgebra(balg));
@@ -734,7 +760,7 @@ class BooleanAlgebra {
             graphics.fillRect(0, 0, bim.getWidth(), bim.getHeight());
             if (drawSolution){
                 if (this.solution == null){
-                    graphics.setColor(new Color(100, 100, 100));
+                    graphics.setColor(new Color(175, 175, 175));
                 } else {
                     graphics.setColor(this.solution.getValue() ? new Color(40, 170, 40) : new Color(170, 40, 40));
                 }
@@ -787,12 +813,21 @@ class BooleanAlgebra {
         }
         if (drawSolution){
             if (this.solution == null){
-                g2.setColor(new Color(100, 100, 100));
+                g2.setColor(new Color(175, 175, 175));
             } else {
                 g2.setColor(this.solution.getValue() ? new Color(40, 170, 40) : new Color(170, 40, 40));
             }
         } else {
             g2.setColor(Color.BLACK);
+        }
+        if (drawSolution){
+            if (this.solution == null){
+                g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 200f));
+            } else {
+                g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 50f));
+            }
+        } else {
+            g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 100f));
         }
         stage.drawOp(g2, maxWidth, width , 0 + 2, totalHeight - 2);
 //        g2.setColor(Color.BLACK);
@@ -870,7 +905,7 @@ enum BooleanOP {
     AND("∧", (a, b) -> a & b){
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
+//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
 
 //            g2.setColor(Color.BLACK);
             //vertical line for the and
@@ -893,7 +928,7 @@ enum BooleanOP {
     OR("∨", (a, b) -> a | b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
+//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
 
             QuadCurve2D curve = new QuadCurve2D.Double(startX, startY, startX + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
             g2.draw(curve);
@@ -913,7 +948,7 @@ enum BooleanOP {
     XOR("⊕", (a, b) -> a ^ b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
+//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
 
             QuadCurve2D curve = new QuadCurve2D.Double(startX+(widthX/10d), startY, startX+5 + (2*widthX/3d), startY + (heightY/10d), startX + widthX - 1, startY + heightY/2d);
             g2.draw(curve);
