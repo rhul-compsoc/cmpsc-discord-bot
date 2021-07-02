@@ -24,17 +24,18 @@ import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 public class Bot {
 
-    static String[] emojis = {"✅", "❓", "❌"};
-    static Database database = Database.getInstance();
-    static Logger logger = LogManager.getLogger(Bot.class);
+    public static final String[] emojis = {"✅", "❓", "❌"};
+    public static final Database database = Database.getInstance();
+    static final Logger logger = LogManager.getLogger(Bot.class);
     static ChatXP chatXP;
     static JDA jda;
 
-    public static void main(String[] args) throws IOException, LoginException, InterruptedException {
+    public static void main(String[] args) throws IOException, LoginException, InterruptedException, NoSuchAlgorithmException {
 //        Configurator.setLevel(BotRateLimiter.class.getName(), Level.TRACE);
 //        Configurator.setLevel(RateLimiter.class.getName(), Level.TRACE);
         //read the token in
@@ -51,7 +52,7 @@ public class Bot {
         }
     }
 
-    private static JDA initBot() throws IOException, LoginException, InterruptedException {
+    private static JDA initBot() throws IOException, LoginException, InterruptedException, NoSuchAlgorithmException {
         List<String> lines = Files.readAllLines(Paths.get("token.txt"));
         EventManager manager = new EventManager();
         JDA jda = JDABuilder.createDefault(lines.get(0), EnumSet.allOf(GatewayIntent.class))
@@ -67,6 +68,7 @@ public class Bot {
         chatXP = new ChatXP(jda);
         jda.awaitReady();
         InformationUpdateHandler updateHandler = new InformationUpdateHandler(jda);
+        updateHandler.ready(jda);
         MessageAccumulator accumulator = new MessageAccumulator(jda);
         return jda;
     }
