@@ -1,5 +1,6 @@
 package uk.co.hexillium.rhul.compsoc;
 
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.ReadyEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
@@ -15,15 +16,27 @@ public class EventManager implements EventListener{
 
     EventManager(){}
 
+    volatile boolean missingDispatcher = true;
+    JDA jda;
+
     public void setDispatcher(CommandDispatcher dispatcher) {
         this.dispatcher = dispatcher;
+        if (!missingDispatcher){
+            dispatcher.onLoad(jda);
+        }
+        missingDispatcher = false;
     }
 
     @Override
     public void onEvent(@Nonnull GenericEvent event) {
         if (event instanceof ReadyEvent){
             System.out.println("Ready!");
-            dispatcher.onLoad(event.getJDA());
+            if (missingDispatcher){
+                missingDispatcher = false;
+                jda = event.getJDA();
+            } else {
+                dispatcher.onLoad(event.getJDA());
+            }
         }
         if (event instanceof GuildMessageReceivedEvent){
             if (dispatcher != null)
