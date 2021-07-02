@@ -10,7 +10,7 @@ public interface ButtonHandler {
 
     void initButtonHandle(HMAC hmac, JDA jda);
 
-    void handleButtonInteraction(ButtonInteraction interaction, boolean userLockedHMAC);
+    void handleButtonInteraction(ButtonInteraction interaction, String button, boolean userLockedHMAC);
 
     List<String> registerHandles();
 

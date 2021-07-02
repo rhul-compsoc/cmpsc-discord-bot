@@ -44,6 +44,7 @@ public class CommandDispatcher {
     public CommandDispatcher() throws NoSuchAlgorithmException {
         this.commands = new ArrayList<>();
         this.triggerMap = new HashMap<>();
+        this.buttonMap = new HashMap<>();
 
         buttons = new ArrayList<>();
 
@@ -106,10 +107,12 @@ public class CommandDispatcher {
         if (keyFile.exists()){
             return Files.readAllBytes(Path.of("keyfile.bin"));
         }
+        logger.warn("Key generation needed. Generating key...");
         Random secureRandom;
         try {
             secureRandom = SecureRandom.getInstanceStrong();
         } catch (NoSuchAlgorithmException e) {
+            logger.error("Failed to get a secure random instance");
             secureRandom = new Random();
         }
         byte[] secretKey = new byte[32];
@@ -117,6 +120,7 @@ public class CommandDispatcher {
 
         //save it
         Files.write(Path.of("keyfile.bin"), secretKey);
+        logger.info("Saved keyfile.");
 
         return secretKey;
     }
@@ -219,8 +223,7 @@ public class CommandDispatcher {
             logger.warn("Attempted interaction forgery, or HMAC error. From " + event.getUser() + " with content: " + event.getComponentId());
             return;
         }
-        String[] components = usr.split("\\|");
-        buttonMap.get(components[0]).handleButtonInteraction(event, memberLock);
-
+        String[] components = usr.split("\\|", 2);
+        buttonMap.get(components[0]).handleButtonInteraction(event, components[1], memberLock);
     }
 }
