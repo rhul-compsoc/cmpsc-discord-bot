@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.GenericEvent;
+import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
@@ -49,7 +50,7 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class Trivia extends Command implements EventListener, ButtonHandler, SlashCommandHandler {
+public class Trivia extends Command implements EventListener, ComponentInteractionHandler, SlashCommandHandler {
 
     private static final Logger LOGGER = LogManager.getLogger(Trivia.class);
 
@@ -138,12 +139,12 @@ public class Trivia extends Command implements EventListener, ButtonHandler, Sla
     }
 
     @Override
-    public void initButtonHandle(HMAC hmac, JDA jda) {
+    public void initComponentInteractionHandle(HMAC hmac, JDA jda) {
         this.hmac = hmac;
     }
 
     @Override
-    public void handleButtonInteraction(ButtonInteraction interaction, String data, boolean userLockedHMAC) {
+    public void handleButtonInteraction(ButtonClickEvent interaction, String data, boolean userLockedHMAC) {
         char type = data.charAt(0);
         //leave cases for things like pagination and such here.
         switch (type){

@@ -3,11 +3,12 @@ package uk.co.hexillium.rhul.compsoc;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
+import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
 import net.dv8tion.jda.api.requests.restaction.CommandListUpdateAction;
-import uk.co.hexillium.rhul.compsoc.commands.ButtonHandler;
+import uk.co.hexillium.rhul.compsoc.commands.ComponentInteractionHandler;
 import uk.co.hexillium.rhul.compsoc.commands.Command;
 import uk.co.hexillium.rhul.compsoc.commands.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
@@ -41,8 +42,8 @@ public class CommandDispatcher {
 
     private List<Command> commands;
     private HashMap<String, Command> triggerMap;
-    private HashMap<String, ButtonHandler> buttonMap;
-    private List<ButtonHandler> buttons;
+    private HashMap<String, ComponentInteractionHandler> buttonMap;
+    private List<ComponentInteractionHandler> buttons;
     private List<SlashCommandHandler> slashCommands;
     private HashMap<String, SlashCommandHandler> slashCommandMap;
     private final HMAC hmac;
@@ -72,8 +73,8 @@ public class CommandDispatcher {
                     Class<?> current = routeClassInfo.loadClass();
                     Object newInst = current.getDeclaredConstructor().newInstance();
                     logger.info("Inspecting " + current.getName() + " to load");
-                    if (newInst instanceof ButtonHandler){
-                        buttons.add((ButtonHandler) newInst);
+                    if (newInst instanceof ComponentInteractionHandler){
+                        buttons.add((ComponentInteractionHandler) newInst);
                         logger.info("Adding Button Handler " + current.getName());
                     }
                     if (newInst instanceof Command){
@@ -98,7 +99,7 @@ public class CommandDispatcher {
             }
         }
 
-        for (ButtonHandler handler : buttons){
+        for (ComponentInteractionHandler handler : buttons){
             for (String trigger : handler.registerHandles()){
                 this.buttonMap.put(trigger, handler);
             }
@@ -143,8 +144,8 @@ public class CommandDispatcher {
         for (Command c : commands) {
             c.onLoad(jda, this);
         }
-        for (ButtonHandler handler : buttons){
-            handler.initButtonHandle(hmac, jda);
+        for (ComponentInteractionHandler handler : buttons){
+            handler.initComponentInteractionHandle(hmac, jda);
         }
         CommandListUpdateAction updateCmds = jda.updateCommands();
         for (SlashCommandHandler handler : slashCommands){
@@ -241,7 +242,7 @@ public class CommandDispatcher {
     }
 
 
-    public void dispatchButtonPress(ButtonInteraction event) {
+    public void dispatchButtonPress(ButtonClickEvent event) {
         //perform HMAC check:
         String comp = event.getComponentId();
         if (comp.length() <= 23){
