@@ -5,9 +5,13 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.GenericEvent;
+import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.interactions.commands.OptionMapping;
+import net.dv8tion.jda.api.interactions.commands.OptionType;
+import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
@@ -23,6 +27,8 @@ import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
+import javax.annotation.CheckReturnValue;
+import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.geom.QuadCurve2D;
@@ -43,7 +49,7 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class Trivia extends Command implements EventListener, ButtonHandler {
+public class Trivia extends Command implements EventListener, ButtonHandler, SlashCommandHandler {
 
     private static final Logger LOGGER = LogManager.getLogger(Trivia.class);
 
@@ -229,22 +235,17 @@ public class Trivia extends Command implements EventListener, ButtonHandler {
         }
 
         if (event.getCommand().equalsIgnoreCase("leaderboard") || event.getCommand().equalsIgnoreCase("lb")) {
-            int position = 0;
+            int scorePage = 0;
             if (event.getArgs().length == 1) {
                 try {
-                    position = Integer.parseInt(event.getArgs()[0]) - 1;
+                    scorePage = Integer.parseInt(event.getArgs()[0]) - 1;
                 } catch (NumberFormatException ex) {
                 }
             }
 
-            int finalPosition1 = position;
+            int scorePageFinal = scorePage;
             Database.runLater(() -> { //don't run on the WS thread
-                //leaderboards
-                int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
-                int finalPosition = Math.max(0, Math.min(maxPos, finalPosition1));
-                List<TriviaScore> scores = Database.TRIVIA_STORAGE.fetchLeaderboard(finalPosition);
-                TriviaScore userScore = Database.TRIVIA_STORAGE.fetchUserScore(event.getAuthor().getIdLong());
-                event.reply(getScores(userScore, scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10) + 1));
+                event.reply(sendScoreboardInfo(scorePageFinal, event.getAuthor().getIdLong()));
             });
             return;
         }
@@ -365,6 +366,17 @@ public class Trivia extends Command implements EventListener, ButtonHandler {
             answerQuestion(answer, event.getUser(), event.getTextChannel(), event::reply);
             event.getMessage().delete().queue();;
         }
+    }
+
+    @CheckReturnValue
+    @Nonnull
+    private MessageEmbed sendScoreboardInfo(int scorePage, long targetID) {
+        //leaderboards
+        int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
+        int finalPosition = Math.max(0, Math.min(maxPos, scorePage));
+        List<TriviaScore> scores = Database.TRIVIA_STORAGE.fetchLeaderboard(finalPosition);
+        TriviaScore userScore = Database.TRIVIA_STORAGE.fetchUserScore(targetID);
+        return getScores(userScore, scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10) + 1);
     }
 
     private synchronized void answerQuestion(String answer, User user, TextChannel channel, Consumer<String> error) {
@@ -575,6 +587,32 @@ public class Trivia extends Command implements EventListener, ButtonHandler {
         return lower + ThreadLocalRandom.current().nextInt((upper - lower) + 1);
     }
 
+    @Override
+    public List<CommandData> registerGlobalCommands() {
+        List<CommandData> commands = new ArrayList<>();
+        commands.add(
+                new CommandData("leaderboard", "Show the leaderboard")
+                .addOption(OptionType.INTEGER, "page", "Page number", false)
+        );
+        return commands;
+    }
+
+    @Override
+    public void handleSlashCommand(SlashCommandEvent event) {
+        if (event.getName().equals("leaderboard")){
+            if (event.getChannel().getIdLong() != channelID){
+                event.reply("This isn't the correct channel for this!  Please use <#" + channelID + "> to view the leaderboard.")
+                        .setEphemeral(true).queue();
+                return;
+            }
+            //send the normal message.
+            OptionMapping opt = event.getOption("page");
+            int pageNumber = opt == null ? 0 : (int) opt.getAsLong();
+            Database.runLater(() -> {
+                event.replyEmbeds(sendScoreboardInfo(pageNumber - 1, event.getUser().getIdLong())).setEphemeral(false).queue();
+            });
+        }
+    }
 }
 
 class Solution {
