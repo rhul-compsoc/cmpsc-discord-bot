@@ -3,9 +3,13 @@ package uk.co.hexillium.rhul.compsoc;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
+import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
+import net.dv8tion.jda.api.requests.restaction.CommandListUpdateAction;
 import uk.co.hexillium.rhul.compsoc.commands.ButtonHandler;
 import uk.co.hexillium.rhul.compsoc.commands.Command;
+import uk.co.hexillium.rhul.compsoc.commands.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import net.dv8tion.jda.api.JDA;
@@ -39,14 +43,19 @@ public class CommandDispatcher {
     private HashMap<String, Command> triggerMap;
     private HashMap<String, ButtonHandler> buttonMap;
     private List<ButtonHandler> buttons;
+    private List<SlashCommandHandler> slashCommands;
+    private HashMap<String, SlashCommandHandler> slashCommandMap;
     private final HMAC hmac;
 
     public CommandDispatcher() throws NoSuchAlgorithmException {
         this.commands = new ArrayList<>();
         this.triggerMap = new HashMap<>();
         this.buttonMap = new HashMap<>();
+        this.slashCommandMap = new HashMap<>();
 
         buttons = new ArrayList<>();
+        slashCommands = new ArrayList<>();
+
 
         String pkg = "uk.co.hexillium.rhul.compsoc.commands";
         try (ScanResult scanResult =
@@ -65,11 +74,15 @@ public class CommandDispatcher {
                     logger.info("Inspecting " + current.getName() + " to load");
                     if (newInst instanceof ButtonHandler){
                         buttons.add((ButtonHandler) newInst);
-                        logger.info("Loading Button Handler " + current.getName());
+                        logger.info("Adding Button Handler " + current.getName());
                     }
                     if (newInst instanceof Command){
                         this.commands.add((Command) newInst);
-                        logger.info("Loading Command Handler " + current.getName());
+                        logger.info("Adding Command Handler " + current.getName());
+                    }
+                    if (newInst instanceof SlashCommandHandler){
+                        this.slashCommands.add((SlashCommandHandler) newInst);
+                        logger.info("Adding Slash Command Handler " + current.getName());
                     }
                     logger.info("Loaded " + routeClassInfo.loadClass().getName());
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
@@ -133,6 +146,17 @@ public class CommandDispatcher {
         for (ButtonHandler handler : buttons){
             handler.initButtonHandle(hmac, jda);
         }
+        CommandListUpdateAction updateCmds = jda.updateCommands();
+        for (SlashCommandHandler handler : slashCommands){
+            handler.initSlashCommandHandler(jda);
+            List<CommandData> data = handler.registerGlobalCommands();
+            updateCmds.addCommands(data);
+            for (CommandData cmd : data){
+                this.slashCommandMap.put(cmd.getName(), handler);
+            }
+        }
+        updateCmds.queue();
+
     }
     public void loadScheduler(JobScheduler scheduler) {
         for (Command c : commands) {
@@ -156,6 +180,17 @@ public class CommandDispatcher {
             }
         });
 
+    }
+
+    public void handleSlashCommand(SlashCommandEvent event){
+        String key = event.getName();
+        SlashCommandHandler handler = slashCommandMap.get(key);
+        if (handler == null){
+            logger.error("Unregistered command ID: " + event.getCommandId() + ", tag: " + event.getName() + " " + event);
+            return;
+        }
+        logger.info("Member " + event.getMember() + " executed slash command " + event.getCommandPath());
+        handler.handleSlashCommand(event);
     }
 
     private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){
