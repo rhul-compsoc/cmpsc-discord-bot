@@ -7,8 +7,10 @@ import java.util.Arrays;
 
 /**
  * A helper for preventing button forgeries.  This will become redundant due to Discord's decision to actually implement
- *  a form of security on their buttons.  Currently, the Discord `hash` is not a required feild for clients to send,
+ *  a form of security on their buttons.  Currently, the Discord `hash` is not a required field for clients to send,
  *  and so validation is currently not performed, and spoofing/forgery is still possible.
+ *
+ *  As of 04th of June 2020, clients are required to send the hash, and thus this class is no longer needed to verify buttons :(
  */
 public class HMAC {
     private static final byte INNER_PAD = 0x5c;

@@ -62,7 +62,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         Collections.addAll(buttonHandles, buttonPrefix);
     }
 
-    private HMAC hmac;
+//    private HMAC hmac;
 
     private static final long channelID = 766050353174544384L;
     private long recentSentMessageID = -1L;
@@ -133,18 +133,14 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         // "a" -> answer, "t" -> true, "f" -> false;
         String trStr = (buttonPrefix[0] + "|" + "at");
         String faStr = (buttonPrefix[0] + "|" + "af");
-        String trueSign = trStr + HMAC.toBase4096String(hmac.sign(trStr.getBytes(StandardCharsets.UTF_8), 0, channelID));
-        String falseSign = faStr + HMAC.toBase4096String(hmac.sign(faStr.getBytes(StandardCharsets.UTF_8), 0, channelID));
-        return ActionRow.of(Button.success(trueSign, "TRUE"), Button.danger(falseSign, "FALSE"));
+        return ActionRow.of(Button.success(trStr, "TRUE"), Button.danger(faStr, "FALSE"));
     }
 
     @Override
-    public void initComponentInteractionHandle(HMAC hmac, JDA jda) {
-        this.hmac = hmac;
-    }
+    public void initComponentInteractionHandle(JDA jda) {}
 
     @Override
-    public void handleButtonInteraction(ButtonClickEvent interaction, String data, boolean userLockedHMAC) {
+    public void handleButtonInteraction(ButtonClickEvent interaction, String data) {
         char type = data.charAt(0);
         //leave cases for things like pagination and such here.
         switch (type){

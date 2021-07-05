@@ -10,10 +10,10 @@ import java.util.List;
 
 public interface ComponentInteractionHandler {
 
-    void initComponentInteractionHandle(HMAC hmac, JDA jda);
+    void initComponentInteractionHandle(JDA jda);
 
-    default void handleButtonInteraction(ButtonClickEvent interaction, String button, boolean userLockedHMAC){};
-    default void handleSelectionMenuInteraction(SelectionMenuEvent interaction, String button, boolean userLockedHMAC){};
+    default void handleButtonInteraction(ButtonClickEvent interaction, String button){};
+    default void handleSelectionMenuInteraction(SelectionMenuEvent interaction, String button){};
 
     List<String> registerHandles();
 

@@ -145,7 +145,7 @@ public class CommandDispatcher {
             c.onLoad(jda, this);
         }
         for (ComponentInteractionHandler handler : buttons){
-            handler.initComponentInteractionHandle(hmac, jda);
+            handler.initComponentInteractionHandle(jda);
         }
         CommandListUpdateAction updateCmds = jda.updateCommands();
         for (SlashCommandHandler handler : slashCommands){
@@ -244,22 +244,23 @@ public class CommandDispatcher {
 
     public void dispatchButtonPress(ButtonClickEvent event) {
         //perform HMAC check:
-        String comp = event.getComponentId();
-        if (comp.length() <= 23){
-            event.reply("Failed interaction; component not long enough to contain a valid MAC.").setEphemeral(true).queue();
-            return;
-        }
-        String hmac_str = comp.substring(comp.length() - 23);
-        String usr = comp.substring(0, comp.length() - 23);
-        boolean memberLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), event.getUser().getIdLong(), event.getChannel().getIdLong());
-        boolean channelLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), 0, event.getChannel().getIdLong());
-
-        if (!memberLock && !channelLock){
-            // this interaction dies here, and is dropped due to being faulty.
-            logger.warn("Attempted interaction forgery, or HMAC error. From " + event.getUser() + " with content: " + event.getComponentId());
-            return;
-        }
-        String[] components = usr.split("\\|", 2);
-        buttonMap.get(components[0]).handleButtonInteraction(event, components[1], memberLock);
+        //HMAC is no longer needed...
+//        String comp = event.getComponentId();
+//        if (comp.length() <= 23){
+//            event.reply("Failed interaction; component not long enough to contain a valid MAC.").setEphemeral(true).queue();
+//            return;
+//        }
+//        String hmac_str = comp.substring(comp.length() - 23);
+//        String usr = comp.substring(0, comp.length() - 23);
+//        boolean memberLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), event.getUser().getIdLong(), event.getChannel().getIdLong());
+//        boolean channelLock = hmac.verify(usr.getBytes(StandardCharsets.UTF_8), HMAC.toByteArray(hmac_str), 0, event.getChannel().getIdLong());
+//
+//        if (!memberLock && !channelLock){
+//            // this interaction dies here, and is dropped due to being faulty.
+//            logger.warn("Attempted interaction forgery, or HMAC error. From " + event.getUser() + " with content: " + event.getComponentId());
+//            return;
+//        }
+        String[] components = event.getComponentId().split("\\|", 2);
+        buttonMap.get(components[0]).handleButtonInteraction(event, components[1]);
     }
 }
