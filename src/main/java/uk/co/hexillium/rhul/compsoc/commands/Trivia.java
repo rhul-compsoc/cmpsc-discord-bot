@@ -148,7 +148,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             // a for answer
                  if (recentSentMessageID != interaction.getMessageIdLong()){
                             interaction.reply("Error: answer button tagged on non-recent message. Please report this error.").setEphemeral(true).queue();
-                            interaction.editComponents(Collections.emptyList()).queue();
+                            interaction.getHook().editOriginalComponents(Collections.emptyList()).queue();
                             return;
                         }
                  answerQuestion(data.substring(1, 2),  //either 't' or 'f'

@@ -114,6 +114,7 @@ public class RoleMenuStorage {
                         set.getInt(8),
                         new ArrayList<>()
                 );
+                categories.add(category);
             }
 
             return new RoleSelectionMenu(categories, guildID);
@@ -246,6 +247,7 @@ public class RoleMenuStorage {
         for (RoleSelectionCategory cat : menu.getCategories()){
             if (cat.getName().trim().equalsIgnoreCase(categoryName.trim())){
                 insertRole(guildID, role, cat.getCategoryID());
+                return;
             }
         }
         throw new IllegalArgumentException("Category name was not valid.");

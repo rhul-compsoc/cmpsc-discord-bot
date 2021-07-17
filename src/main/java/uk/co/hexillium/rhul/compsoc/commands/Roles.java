@@ -77,12 +77,11 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "catname", "If provided, will only show this category", false),
                         new SubcommandData("addcategory", "Add a category to the roles")
                                 .addOption(OptionType.STRING, "name", "The name of this new category (must be unique)", true)
+//                                .addOption(OptionType.STRING, "buttonstyle", "The button style", true)
                                 .addOptions(
                                         new OptionData(OptionType.STRING, "buttonstyle", "The button style that should be used for selecting this category.", true)
-                                                .addChoices((Command.Choice[]) Arrays.stream(ButtonStyle.values())
-                                                        .map(style -> new Command.Choice(style.name(), style.name()))
-                                                        .toArray()
-                                                )
+                                                .addChoice("PRIMARY", "PRIMARY")
+                                                .addChoice("SECONDARY", "SECONDARY")
                                 )
                                 .addOption(OptionType.STRING, "emoji", "The emoji used to represent this category", false)
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
@@ -106,10 +105,8 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "emoji", "The emoji used to represent this category", false)
                                 .addOptions(
                                         new OptionData(OptionType.STRING, "buttonstyle", "The button style that should be used for selecting this category.", false)
-                                                .addChoices((Command.Choice[]) Arrays.stream(ButtonStyle.values())
-                                                        .map(style -> new Command.Choice(style.name(), style.name()))
-                                                        .toArray()
-                                                )
+                                                .addChoice("PRIMARY", "PRIMARY")
+                                                .addChoice("SECONDARY", "SECONDARY")
                                 )
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
                                 .addOption(OptionType.INTEGER, "minnum", "The minimum number of roles from this category that can be selected (default: 0)", false)
@@ -150,7 +147,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             builder.get(i / 5).add(components.get(i));
         }
 
-        hook.sendMessageEmbeds(eb.build()).addActionRows((ActionRow[]) builder.stream().map(ActionRow::of).toArray()).setEphemeral(true).queue();
+        hook.sendMessageEmbeds(eb.build()).addActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).setEphemeral(true).queue();
     }
 
     public void handleRoleCategoryMenu(Member member, long roleCat, InteractionHook hook) {
@@ -194,6 +191,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             case "manageroles":
                 if (!event.getMember().getRoles().contains(event.getGuild().getRoleById(500612754185650177L))) {
                     event.reply(">:(").setEphemeral(true).queue();
+                    return;
                 }
                 //switch the subcommands
                 if (event.getSubcommandName() == null) {
@@ -218,7 +216,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                     case "list":
                         //args: ?STRING:catname
                         ObjectMapper mapper = new ObjectMapper();
-                        event.reply(asString(Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getMember().getGuild().getIdLong(), true))).queue();
+                        event.reply(asString(Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), true))).queue();
                         break;
                     case "addcategory":
                         //args: STRING:name, STRING:buttonstyle, ?STRING:emoji, ?STRING:description, ?INT:minnum, ?INT:maxnum
@@ -228,10 +226,10 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         }
                         Database.ROLE_MENU_STORAGE.insertCategory(new RoleSelectionCategory(
                                 event.getGuild().getIdLong(),
-                                nameOpt == null ? null : nameOpt.getName(),
-                                descOpt == null ? null : descOpt.getName(),
-                                emojiOpt == null ? null : emojiOpt.getName(),
-                                buttOpt == null ? null : buttOpt.getName(),
+                                nameOpt == null ? null : nameOpt.getAsString(),
+                                descOpt == null ? null : descOpt.getAsString(),
+                                emojiOpt == null ? null : emojiOpt.getAsString(),
+                                buttOpt == null ? null : buttOpt.getAsString(),
                                 -1, min,
                                 max, Collections.emptyList()
                         ));
@@ -239,7 +237,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         break;
                     case "addrole":
                         //args: STRING:category, ROLE:role, ?STRING:description, ?INT:colour, ?STRING:emoji
-                        if (roleOpt == null || catOpt == null){
+                        if (roleOpt == null || catOpt == null) {
                             return;
                         }
                         Role role = roleOpt.getAsRole();
@@ -249,7 +247,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                             role.getName(), colourOpt == null ? role.getColorRaw() : (int) colourOpt.getAsLong(),
                                             emojiOpt == null ? null : emojiOpt.getAsString(), descOpt == null ? null : descOpt.getAsString(),
                                             -1), catOpt.getAsString());
-                        } catch (IllegalArgumentException ex){
+                        } catch (IllegalArgumentException ex) {
                             event.reply(ex.getMessage()).setEphemeral(true).queue();
                         }
                         break;

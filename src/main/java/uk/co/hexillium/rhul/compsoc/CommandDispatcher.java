@@ -67,7 +67,7 @@ public class CommandDispatcher {
                              .scan()) {
             System.out.println(scanResult.getAllClasses().toString());
             for (ClassInfo routeClassInfo : scanResult.getSubclasses(pkg + ".Command")
-                    .union(scanResult.getSubclasses(pkg + ".ButtonHandler"))
+                    .union(scanResult.getClassesImplementing(pkg + ".ComponentInteractionHandler"))
                     .exclude(scanResult.getClassesWithAnnotation("uk.co.hexillium.rhul.compsoc.Disabled"))) {
                 try {
                     Class<?> current = routeClassInfo.loadClass();
@@ -147,7 +147,8 @@ public class CommandDispatcher {
         for (ComponentInteractionHandler handler : buttons){
             handler.initComponentInteractionHandle(jda);
         }
-        CommandListUpdateAction updateCmds = jda.updateCommands();
+        CommandListUpdateAction updateCmds = jda.getGuildById(500612695570120704L).updateCommands();
+//        CommandListUpdateAction updateCmds = jda.updateCommands();
         for (SlashCommandHandler handler : slashCommands){
             handler.initSlashCommandHandler(jda);
             List<CommandData> data = handler.registerGlobalCommands();
