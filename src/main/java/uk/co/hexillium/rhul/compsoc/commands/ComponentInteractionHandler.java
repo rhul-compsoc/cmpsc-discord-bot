@@ -13,7 +13,7 @@ public interface ComponentInteractionHandler {
     void initComponentInteractionHandle(JDA jda);
 
     default void handleButtonInteraction(ButtonClickEvent interaction, String button){};
-    default void handleSelectionMenuInteraction(SelectionMenuEvent interaction, String button){};
+    default void handleSelectionMenuInteraction(SelectionMenuEvent interaction){};
 
     List<String> registerHandles();
 
