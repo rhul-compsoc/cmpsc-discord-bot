@@ -59,7 +59,7 @@ public class EventManager implements EventListener{
         } else if (event instanceof SlashCommandEvent){
             dispatcher.handleSlashCommand((SlashCommandEvent) event);
         } else if (event instanceof SelectionMenuEvent){
-
+            dispatcher.dispatchSelectionMenu((SelectionMenuEvent) event);
         }
     }
 }
