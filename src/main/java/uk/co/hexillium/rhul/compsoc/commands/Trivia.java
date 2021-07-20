@@ -57,6 +57,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     private static final String[] commands = {"t", "triv", "trivia", "leaderboard", "lb"};
     private static final String[] buttonPrefix = {"c:tr"}; //command:trivia -- these will come in the form of c:tr|1/0<HMAC>
     private static final List<String> buttonHandles;
+
     static {
         buttonHandles = new ArrayList<>();
         Collections.addAll(buttonHandles, buttonPrefix);
@@ -129,7 +130,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         });
     }
 
-    private ActionRow getBooleanActionRow(){
+    private ActionRow getBooleanActionRow() {
         // "a" -> answer, "t" -> true, "f" -> false;
         String trStr = (buttonPrefix[0] + "|" + "at");
         String faStr = (buttonPrefix[0] + "|" + "af");
@@ -137,24 +138,26 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     }
 
     @Override
-    public void initComponentInteractionHandle(JDA jda) {}
+    public void initComponentInteractionHandle(JDA jda) {
+    }
 
     @Override
     public void handleButtonInteraction(ButtonClickEvent interaction, String data) {
         char type = data.charAt(0);
         //leave cases for things like pagination and such here.
-        switch (type){
+        switch (type) {
             case 'a':
-            // a for answer
-                 if (recentSentMessageID != interaction.getMessageIdLong()){
-                            interaction.reply("Error: answer button tagged on non-recent message. Please report this error.").setEphemeral(true).queue();
-                            interaction.getHook().editOriginalComponents(Collections.emptyList()).queue();
-                            return;
-                        }
-                 answerQuestion(data.substring(1, 2),  //either 't' or 'f'
-                         interaction.getUser(), interaction.getTextChannel(),
-                         err -> interaction.reply(err).setEphemeral(true).queue());
-                 break;
+                // a for answer
+                if (recentSentMessageID != interaction.getMessageIdLong()) {
+                    interaction.deferEdit().queue();
+                    interaction.getHook().editOriginalComponents(Collections.emptyList()).queue();
+                    interaction.getHook().sendMessage("Error: answer button tagged on non-recent message. Please report this error.").setEphemeral(true).queue();
+                    return;
+                }
+                answerQuestion(data.substring(1, 2),  //either 't' or 'f'
+                        interaction.getUser(), interaction.getTextChannel(),
+                        err -> interaction.reply(err).setEphemeral(true).queue());
+                break;
         }
 
     }
@@ -361,7 +364,8 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 return;
             }
             answerQuestion(answer, event.getUser(), event.getTextChannel(), event::reply);
-            event.getMessage().delete().queue();;
+            event.getMessage().delete().queue();
+            ;
         }
     }
 
@@ -589,15 +593,15 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         List<CommandData> commands = new ArrayList<>();
         commands.add(
                 new CommandData("leaderboard", "Show the leaderboard")
-                .addOption(OptionType.INTEGER, "page", "Page number", false)
+                        .addOption(OptionType.INTEGER, "page", "Page number", false)
         );
         return commands;
     }
 
     @Override
     public void handleSlashCommand(SlashCommandEvent event) {
-        if (event.getName().equals("leaderboard")){
-            if (event.getChannel().getIdLong() != channelID){
+        if (event.getName().equals("leaderboard")) {
+            if (event.getChannel().getIdLong() != channelID) {
                 event.reply("This isn't the correct channel for this!  Please use <#" + channelID + "> to view the leaderboard.")
                         .setEphemeral(true).queue();
                 return;
