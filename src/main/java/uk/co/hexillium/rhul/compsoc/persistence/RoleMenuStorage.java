@@ -205,7 +205,7 @@ public class RoleMenuStorage {
                     set.getLong(6),
                     set.getInt(7),
                     set.getInt(8),
-                    Collections.emptyList()
+                    new ArrayList<>()
             );
         } catch (SQLException ex) {
             LOGGER.error("Failed to fetch selection menu category data", ex);
