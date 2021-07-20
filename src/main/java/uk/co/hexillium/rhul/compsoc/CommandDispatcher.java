@@ -4,6 +4,7 @@ import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
 import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
+import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
@@ -176,7 +177,7 @@ public class CommandDispatcher {
                 String command = args[0].substring(defaultCommandDelimiter.length());
                 Command toRun = findCommand(command, true);
                 if (toRun == null) return;
-                logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild command " + command + " with args " + Arrays.toString(args));
+                logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild command " + command +  "=>" + toRun.getClass().getName() + " with args " + Arrays.toString(args));
                 CommandEvent cmdE = new CommandEvent(event, settings);
                 toRun.internalHandleCommand(cmdE);
             }
@@ -191,7 +192,7 @@ public class CommandDispatcher {
             logger.error("Unregistered command ID: " + event.getCommandId() + ", tag: " + event.getName() + " " + event);
             return;
         }
-        logger.info("Member " + event.getMember() + " executed slash command " + event.getCommandPath());
+        logger.info("Member " + event.getMember() + " executed " + handler.getClass().getName() + " slash command " + event.getCommandPath());
         handler.handleSlashCommand(event);
     }
 
@@ -262,6 +263,19 @@ public class CommandDispatcher {
 //            return;
 //        }
         String[] components = event.getComponentId().split("\\|", 2);
-        buttonMap.get(components[0]).handleButtonInteraction(event, components[1]);
+        ComponentInteractionHandler handler = buttonMap.get(components[0]);
+        logger.info("User " + event.getUser() + " dispatched " + handler.getClass().getName() + " with button interaction + " + event.getComponentId());
+        Database.runLater(() -> {
+            handler.handleButtonInteraction(event, components[1]);
+        });
+    }
+
+    public void dispatchSelectionMenu(SelectionMenuEvent event){
+        String[] components = event.getComponentId().split("\\|", 2);
+        ComponentInteractionHandler handler = buttonMap.get(components[0]);
+        logger.info("User " + event.getUser() + " dispatched " + handler.getClass().getName() + " with selectionMenu interaction + " + event.getComponentId());
+        Database.runLater(() -> {
+            handler.handleSelectionMenuInteraction(event);
+        });
     }
 }
