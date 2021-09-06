@@ -1,7 +1,18 @@
 package uk.co.hexillium.rhul.compsoc.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.MessageBuilder;
+import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.exceptions.ParsingException;
+import net.dv8tion.jda.api.requests.restaction.MessageAction;
+import net.dv8tion.jda.api.utils.data.DataArray;
+import net.dv8tion.jda.api.utils.data.DataObject;
+import net.dv8tion.jda.internal.JDAImpl;
+import net.dv8tion.jda.internal.entities.DataMessage;
+import net.dv8tion.jda.internal.entities.EntityBuilder;
+import net.dv8tion.jda.internal.entities.GuildImpl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import spark.Filter;
@@ -10,10 +21,7 @@ import spark.Route;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GameAccountBinding;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +44,10 @@ public class RestAPI {
     private Route insertGameBinding;
     private Route deleteGameBinding;
     private Route getMemberInfo;
+    private Filter guildCheck;
+    private Filter channelCheck;
+    private Route getGuildInfo;
+    private Route sendMessage;
 
     private ScheduledExecutorService timer;
 
@@ -69,8 +81,18 @@ public class RestAPI {
                 timings.remove(request);
             }));
             get("/hello", (req, resp) -> "hi!");
-            get("/getmembers/:guildid", getMembers);
-            get("/guild/:guildid/member/:memberid/info", getMemberInfo);
+            get("/getmembers/:guildid", getMembers); //DEPRECATED; FOR REMOVAL
+            path("/guild/:guildid", () ->{
+                before("/*", guildCheck);
+                get("/info", getGuildInfo);
+                get("/members", getMembers);
+                get("/member/:memberid/info", getMemberInfo);
+                path("/channels/:channelid", () -> {
+                    before("/*", channelCheck);
+                    post("/sendmessage", sendMessage);
+                });
+            });
+//            get("/guild/:guildid/member/:memberid/info", getMemberInfo);
             path("/games/bindings", () -> {
                 path("/guild/:guildid", () -> {
                     path("/member/:memberid", () -> {
@@ -105,6 +127,77 @@ public class RestAPI {
                 halt(403, "Invalid, expired, incorrect or missing token.");
             }
         });
+        guildCheck = ((request, response) -> {
+            if (jda.getGuildById(request.params(":guildid")) == null){
+                halt(404, "Invalid guild.");
+            }
+        });
+        channelCheck = ((request, response) -> {
+            if (jda.getGuildById(request.params(":guildid"))
+                    //we know that this isn't null, as the guild has been checked already
+                    .getGuildChannelById(request.params(":channelid")) == null){
+                halt(404, "Invalid channel, or guild->channel.");
+            }
+        });
+        getGuildInfo = (((request, response) -> {
+            Guild guild = jda.getGuildById(request.params(":guildid"));
+            if (guild == null){
+                logger.error("Guild was null, but passed nullcheck filter.", new IllegalStateException());
+                return 500;
+            }
+            DataObject guildObj = DataObject.empty();
+            guildObj.put("name", guild.getName());
+            guildObj.put("snowflake", guild.getId());
+            guildObj.put("memberCount", guild.getMemberCount());
+            DataArray channels = DataArray.empty();
+            for (GuildChannel channel : guild.getChannels()){
+                DataObject channelObj = DataObject.empty();
+                channelObj.put("name", channel.getName());
+                if (channel instanceof TextChannel) {
+                    channelObj.put("description", ((TextChannel) channel).getTopic());
+                }
+                channelObj.put("pos", channel.getPosition());
+                channelObj.put("type", channel.getType().name());
+                channelObj.put("snowflake", channel.getId());
+                channels.add(channelObj);
+            }
+            response.type("application/json");
+            return guildObj.toJson();
+        }));
+        sendMessage = (((request, response) -> {
+            DataObject messageJson = DataObject.fromJson(request.body());
+            TextChannel channel = jda.getGuildById(request.params(":guildid"))
+                    //we know that this isn't null, as the guild has been checked already
+                    .getTextChannelById(request.params(":channelid"));
+            if (channel == null){
+                halt(404, "Channel is not of type TEXT.");
+                return "Channel is not of type TEXT.";
+            }
+            EntityBuilder entityBuilder = ((JDAImpl) jda).getEntityBuilder();
+            String content = messageJson.getString("content", "");
+            Collection<MessageEmbed> msgEmbeds = new ArrayList<>();
+            try {
+                DataArray embeds = messageJson.getArray("embeds");
+                for (Object embedO : embeds){
+                    DataObject embedObj = (DataObject) embedO;
+                    embedObj.put("type", "rich");
+                    msgEmbeds.add(entityBuilder.createMessageEmbed(embedObj));
+                }
+            } catch (ParsingException ignored){}
+            if (content.equals("") && msgEmbeds.isEmpty()){
+                return "Error; no content specified.";
+            }
+            try {
+                if (!content.equals("")) {
+                    channel.sendMessage(content).setEmbeds(msgEmbeds).queue();
+                } else {
+                    channel.sendMessageEmbeds(msgEmbeds).queue();
+                }
+                return "Probably a success.";
+            } catch (Exception ex){
+                return ex.getMessage();
+            }
+        }));
         getMembers = ((request, response) -> {
             long id;
             try {

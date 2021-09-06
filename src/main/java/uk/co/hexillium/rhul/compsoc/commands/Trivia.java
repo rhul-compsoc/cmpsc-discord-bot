@@ -245,7 +245,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
 
             int scorePageFinal = scorePage;
             Database.runLater(() -> { //don't run on the WS thread
-                event.reply(sendScoreboardInfo(scorePageFinal, event.getAuthor().getIdLong()));
+                event.reply(sendScoreboardInfo(scorePageFinal, event.getAuthor().getIdLong())); //todo add buttons to paginate
             });
             return;
         }

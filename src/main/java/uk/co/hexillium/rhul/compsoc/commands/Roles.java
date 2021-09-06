@@ -91,7 +91,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 List<Role> rolesToRemove = toRemove.stream().map(role -> interaction.getGuild().getRoleById(role)).collect(Collectors.toList());
                 try {
                     interaction.getGuild().modifyMemberRoles(interaction.getMember(), rolesToAdd, rolesToRemove).queue();
-                    interaction.getHook().sendMessage("Roles updated!").setEphemeral(true).queue();
+                    interaction.getHook().editOriginal("Roles updated!").setEmbeds(Collections.emptyList()).queue();
                 } catch (Exception ex){
                     interaction.getHook().sendMessage("Failed to modify roles.  Please report this: " + ex.getMessage()).setEphemeral(true).queue();
                     logger.error("Failed to update roles " + rolesToAdd + " rem:" + rolesToRemove, ex);
@@ -196,6 +196,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         }
 
         hook.sendMessageEmbeds(eb.build()).addActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).setEphemeral(true).queue();
+//        hook.editOriginalEmbeds(eb.build()).setActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).queue();
     }
 
     public void handleRoleCategoryMenu(Member member, long roleCat, InteractionHook hook) {
@@ -206,12 +207,15 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             return;
         }
         SelectionMenu.Builder builder = SelectionMenu.create("s:ro:r|" + roleCat);
+        List<Long> roleIDs = member.getRoles().stream().map(Role::getIdLong).collect(Collectors.toList());
         for (RoleSelection role : roles) {
-            builder.addOption(role.getName(),
-                    "m:ro:a|" + role.getCategoryID() + "|" + role.getRoleID(),
-                    role.getDescription(),
-                    role.getEmoji() == null ? null : Emoji.fromMarkdown(role.getEmoji())
-            );
+            SelectOption option = SelectOption.of(role.getName(),
+                    "m:ro:a|" + role.getCategoryID() + "|" + role.getRoleID())
+                    .withDescription(role.getDescription())
+                    .withEmoji(role.getEmoji() == null ? null : Emoji.fromMarkdown(role.getEmoji()))
+                    .withDefault(roleIDs.contains(role.getRoleID()));
+
+            builder.addOptions(option);
         }
         EmbedBuilder emb = new EmbedBuilder();
         emb.setTimestamp(Instant.now());
@@ -224,7 +228,8 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             limits += cat.getMax() < 25 ? "\nYou must select fewer than " + cat.getMax() + " roles. " : "";
             emb.addField("Special Limits:", "The following limits apply to this menu:" + limits, false);
         }
-        hook.sendMessageEmbeds(emb.build()).setEphemeral(true).addActionRow(builder.build()).queue();
+//        hook.sendMessageEmbeds(emb.build()).setEphemeral(true).addActionRow(builder.build()).queue();
+        hook.editOriginalEmbeds(emb.build()).setActionRow(builder.build()).queue();
 
     }
 
@@ -301,6 +306,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                             role.getName(), colourOpt == null ? role.getColorRaw() : (int) colourOpt.getAsLong(),
                                             emojiOpt == null ? null : emojiOpt.getAsString(), descOpt == null ? null : descOpt.getAsString(),
                                             -1), catOpt.getAsString());
+                            event.reply("Success!").setEphemeral(true).queue();
                         } catch (IllegalArgumentException ex) {
                             event.reply(ex.getMessage()).setEphemeral(true).queue();
                         }
