@@ -16,6 +16,7 @@ import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
+import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 import net.dv8tion.jda.api.utils.AttachmentOption;
 import net.dv8tion.jda.api.utils.TimeUtil;
 import net.dv8tion.jda.internal.utils.PermissionUtil;
@@ -130,6 +131,29 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         });
     }
 
+    private ActionRow getPaginationActionRow(int maxPos, int currentPos){
+        String prefix = buttonPrefix[0] + "|p";
+        Button first = Button.of(ButtonStyle.PRIMARY,
+                prefix + "f|" + "0",
+                Emoji.fromMarkdown("⏮"));
+        Button previous = Button.of(ButtonStyle.PRIMARY,
+                prefix + "p|" + Math.max(currentPos-1, 0),
+                Emoji.fromMarkdown("◀"));
+        Button next = Button.of(ButtonStyle.PRIMARY,
+                prefix + "n|" + Math.min(currentPos + 1, maxPos),
+                Emoji.fromMarkdown("▶"));
+        Button last = Button.of(ButtonStyle.PRIMARY,
+                prefix + "l|" + maxPos,
+                Emoji.fromMarkdown("⏭"));
+
+        return ActionRow.of(
+                currentPos == 0 ? first.asDisabled() : first,
+                currentPos == 0 ? previous.asDisabled() : previous,
+                currentPos == maxPos ? next.asDisabled() : next,
+                currentPos == maxPos ? last.asDisabled() : last
+        );
+    }
+
     private ActionRow getBooleanActionRow() {
         // "a" -> answer, "t" -> true, "f" -> false;
         String trStr = (buttonPrefix[0] + "|" + "at");
@@ -158,6 +182,14 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                         interaction.getUser(), interaction.getTextChannel(),
                         err -> interaction.reply(err).setEphemeral(true).queue());
                 break;
+            case 'p':
+                // p for page XYZ|p|pagenum
+                int pageNum = Integer.parseInt(data.split("\\|", 2)[1]);
+                int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10.0) - 1);
+                interaction.editMessageEmbeds(sendScoreboardInfo(pageNum, interaction.getUser().getIdLong(), maxPos))
+                        .setActionRows(getPaginationActionRow(maxPos, pageNum))
+                        .queue();
+
         }
 
     }
@@ -245,7 +277,12 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
 
             int scorePageFinal = scorePage;
             Database.runLater(() -> { //don't run on the WS thread
-                event.reply(sendScoreboardInfo(scorePageFinal, event.getAuthor().getIdLong())); //todo add buttons to paginate
+                int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10.0) - 1);
+                int finalPosition = Math.max(0, Math.min(maxPos, scorePageFinal));
+                event.getTextChannel()
+                        .sendMessageEmbeds(sendScoreboardInfo(finalPosition, event.getAuthor().getIdLong(), maxPos))
+                        .setActionRows(getPaginationActionRow(maxPos, finalPosition))
+                        .queue();
             });
             return;
         }
@@ -371,13 +408,11 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
 
     @CheckReturnValue
     @Nonnull
-    private MessageEmbed sendScoreboardInfo(int scorePage, long targetID) {
+    private MessageEmbed sendScoreboardInfo(int finalPosition, long targetID, int maxPages) {
         //leaderboards
-        int maxPos = Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10;
-        int finalPosition = Math.max(0, Math.min(maxPos, scorePage));
         List<TriviaScore> scores = Database.TRIVIA_STORAGE.fetchLeaderboard(finalPosition);
         TriviaScore userScore = Database.TRIVIA_STORAGE.fetchUserScore(targetID);
-        return getScores(userScore, scores, finalPosition, (Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10) + 1);
+        return getScores(userScore, scores, finalPosition, maxPages + 1);
     }
 
     private synchronized void answerQuestion(String answer, User user, TextChannel channel, Consumer<String> error) {
@@ -610,7 +645,12 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             OptionMapping opt = event.getOption("page");
             int pageNumber = opt == null ? 0 : (int) opt.getAsLong();
             Database.runLater(() -> {
-                event.replyEmbeds(sendScoreboardInfo(pageNumber - 1, event.getUser().getIdLong())).setEphemeral(false).queue();
+                int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers() / 10.0) - 1);
+                int finalPosition = Math.max(0, Math.min(maxPos, pageNumber - 1));
+                event.replyEmbeds(sendScoreboardInfo(finalPosition, event.getUser().getIdLong(), maxPos))
+                        .addActionRows(getPaginationActionRow(maxPos, finalPosition))
+                        .setEphemeral(false)
+                        .queue();
             });
         }
     }
