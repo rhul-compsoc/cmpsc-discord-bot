@@ -1,6 +1,7 @@
 package uk.co.hexillium.rhul.compsoc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.dv8tion.jda.api.JDAInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.api.RestAPI;
@@ -70,6 +71,7 @@ public class Bot {
         InformationUpdateHandler updateHandler = new InformationUpdateHandler(jda);
         updateHandler.ready(jda);
         MessageAccumulator accumulator = new MessageAccumulator(jda);
+        logger.info("CompSocBot started, running JDA version " + JDAInfo.VERSION + "!");
         return jda;
     }
 

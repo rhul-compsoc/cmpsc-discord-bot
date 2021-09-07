@@ -24,6 +24,7 @@ import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 import net.dv8tion.jda.api.interactions.components.Component;
 import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
 import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
+import net.dv8tion.jda.internal.interactions.SelectionMenuImpl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
 public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 
     private static final Logger logger = LogManager.getLogger(Roles.class);
+    ObjectMapper mapper = new ObjectMapper();
 
     @Override
     public void initComponentInteractionHandle(JDA jda) {
@@ -50,13 +52,13 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
     @Override
     public void handleButtonInteraction(ButtonClickEvent interaction, String button) {
         String[] components = interaction.getComponentId().split("\\|", 2);
-        switch (components[0]){
+        switch (components[0]) {
             case "b:ro:c":
                 //a role category button hath been pressed
 
                 long catID = Long.parseLong(components[1]);
-                interaction.deferReply(true).queue();
-                handleRoleCategoryMenu(interaction.getMember(), catID, interaction.getHook());
+//                interaction.deferReply(true).queue();
+                handleRoleCategoryMenu(interaction.getMember(), catID, interaction);
                 break;
         }
     }
@@ -64,23 +66,23 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
     @Override
     public void handleSelectionMenuInteraction(SelectionMenuEvent interaction) {
         String[] components = interaction.getComponentId().split("\\|", 2);
-        switch (components[0]){
+        switch (components[0]) {
             case "s:ro:r":  //add roles to member
                 // The button format is "m:ro:a|CAT_ID|ROLEID"
                 List<String> roleIDs = interaction.getValues();
-                interaction.deferReply(true).queue();
+//                interaction.deferReply(true).queue();
                 long parsedCatID = Long.parseLong(components[1]);
                 List<RoleSelection> roleOptions = Database.ROLE_MENU_STORAGE.getRolesForCategory(interaction.getGuild().getIdLong(), parsedCatID);
                 //add all roles that appear in roleIDs, and remove all roles that are only in roleOptions
                 List<String> toRemove = roleOptions.stream().map(rs -> String.valueOf(rs.getRoleID())).collect(Collectors.toList());
                 List<String> newRoleIDs = new ArrayList<>();
-                for (String string : roleIDs){
+                for (String string : roleIDs) {
                     String[] segments = string.split("\\|", 3);
                     long roleID = Long.parseLong(segments[2]);
                     boolean rolePresent = roleOptions.stream().anyMatch(ro -> ro.getRoleID() == roleID);
                     if (!segments[1].equalsIgnoreCase(String.valueOf(parsedCatID))
-                        || !rolePresent){
-                        interaction.getHook().sendMessage("This role can no longer be assigned via this category.").setEphemeral(true).queue();
+                            || !rolePresent) {
+                        interaction.reply("This role can no longer be assigned via this category.").setEphemeral(true).queue();
                         return;
                     }
                     newRoleIDs.add(segments[2]);
@@ -91,9 +93,9 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 List<Role> rolesToRemove = toRemove.stream().map(role -> interaction.getGuild().getRoleById(role)).collect(Collectors.toList());
                 try {
                     interaction.getGuild().modifyMemberRoles(interaction.getMember(), rolesToAdd, rolesToRemove).queue();
-                    interaction.getHook().editOriginal("Roles updated!").setEmbeds(Collections.emptyList()).queue();
-                } catch (Exception ex){
-                    interaction.getHook().sendMessage("Failed to modify roles.  Please report this: " + ex.getMessage()).setEphemeral(true).queue();
+                    interaction.editMessage("Roles updated!").setEmbeds().setActionRows().queue();
+                } catch (Exception ex) {
+                    interaction.editMessage("Failed to modify roles.  Please report this: " + ex.getMessage()).setEmbeds().setActionRows().queue();
                     logger.error("Failed to update roles " + rolesToAdd + " rem:" + rolesToRemove, ex);
                 }
 
@@ -165,20 +167,22 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
     }
 
     public void handleShowRoles(Member member, InteractionHook hook) {
-        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(member.getGuild().getIdLong(), false);
+        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(member.getGuild().getIdLong(), true);
         EmbedBuilder eb = new EmbedBuilder();
         eb.setTitle("Role Menu");
         eb.setDescription("Select a category from below to be offered roles for that category!");
         eb.setAuthor(member.getEffectiveName(), null, member.getUser().getEffectiveAvatarUrl());
         eb.setTimestamp(Instant.now());
 
-        List<Component> components = menu.getCategories().stream().map(category ->
-                Button.of(category.getStyle(),
-                        "b:ro:c|" + category.getCategoryID(), //buttons:roles:category
-                        category.getName(),
-                        category.getEmoji() == null ? null : Emoji.fromMarkdown(category.getEmoji()
-                        )
-                )
+        List<Component> components = menu.getCategories().stream().map(category -> {
+                    Button button = Button.of(category.getStyle(),
+                            "b:ro:c|" + category.getCategoryID(), //buttons:roles:category
+                            category.getName(),
+                            category.getEmoji() == null ? null : Emoji.fromMarkdown(category.getEmoji()
+                            )
+                    );
+                    return category.getRoles().size() == 0 ? button.asDisabled() : button;
+                }
         ).collect(Collectors.toList());
 
         if (components.size() > 25) {
@@ -199,37 +203,45 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 //        hook.editOriginalEmbeds(eb.build()).setActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).queue();
     }
 
-    public void handleRoleCategoryMenu(Member member, long roleCat, InteractionHook hook) {
+    public void handleRoleCategoryMenu(Member member, long roleCat, ButtonClickEvent hook) {
         RoleSelectionCategory cat = Database.ROLE_MENU_STORAGE.getCategoryFromID(roleCat, member.getGuild().getIdLong(), true);
         List<RoleSelection> roles = cat.getRoles();
         if (roles.size() > 25) {
-            hook.sendMessage("There are too many roles.  Please contact an admin.").setEphemeral(true).queue();
+            hook.editMessage("There are too many roles.  Please contact an admin.").setEmbeds().setActionRows().queue();
             return;
         }
         SelectionMenu.Builder builder = SelectionMenu.create("s:ro:r|" + roleCat);
         List<Long> roleIDs = member.getRoles().stream().map(Role::getIdLong).collect(Collectors.toList());
+        List<SelectOption> defaults = new ArrayList<>();
         for (RoleSelection role : roles) {
             SelectOption option = SelectOption.of(role.getName(),
-                    "m:ro:a|" + role.getCategoryID() + "|" + role.getRoleID())
+                            "m:ro:a|" + role.getCategoryID() + "|" + role.getRoleID())
                     .withDescription(role.getDescription())
-                    .withEmoji(role.getEmoji() == null ? null : Emoji.fromMarkdown(role.getEmoji()))
-                    .withDefault(roleIDs.contains(role.getRoleID()));
-
+                    .withEmoji(role.getEmoji() == null ? null : Emoji.fromMarkdown(role.getEmoji()));
+//                    .withDefault(roleIDs.contains(role.getRoleID()));
+            if (roleIDs.contains(role.getRoleID())) {
+                defaults.add(option);
+            }
             builder.addOptions(option);
         }
+        builder.setDefaultOptions(defaults);
         EmbedBuilder emb = new EmbedBuilder();
         emb.setTimestamp(Instant.now());
         emb.setAuthor(member.getEffectiveName(), null, member.getUser().getEffectiveAvatarUrl());
         emb.setTitle("Options for " + cat.getName());
         emb.setColor(member.getColorRaw());
         emb.setDescription(cat.getDescription());
+        builder.setMaxValues(cat.getMax());
+        builder.setMinValues(cat.getMin());
         if (cat.getMin() > 0 || cat.getMax() < 25) {
             String limits = cat.getMin() > 0 ? "\nYou must select at least " + cat.getMin() + " roles." : "";
-            limits += cat.getMax() < 25 ? "\nYou must select fewer than " + cat.getMax() + " roles. " : "";
+            limits += cat.getMax() < 25 ? "\nYou must select fewer than " + (cat.getMax() - 1) + " roles. " : "";
             emb.addField("Special Limits:", "The following limits apply to this menu:" + limits, false);
         }
 //        hook.sendMessageEmbeds(emb.build()).setEphemeral(true).addActionRow(builder.build()).queue();
-        hook.editOriginalEmbeds(emb.build()).setActionRow(builder.build()).queue();
+        hook.editMessageEmbeds(emb.build()).setActionRow(builder.build()).queue(succ -> {
+        }, logger::error);
+//        logger.info(((SelectionMenuImpl) builder.build()).toData().toString());
 
     }
 
@@ -295,7 +307,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                             return;
                         }
                         Role role = roleOpt.getAsRole();
-                        if (!role.getGuild().getSelfMember().canInteract(role)){
+                        if (!role.getGuild().getSelfMember().canInteract(role)) {
                             event.reply("This role cannot be added, as I cannot assign roles higher than myself to members.\n" +
                                     "Please adjust the roles such that this role is lower than my highest role.").setEphemeral(true).queue();
                             return;
@@ -312,15 +324,19 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         }
                         break;
                     case "delrole":
+                        //todo
                         //args: STRING:category, ROLE:role
                         break;
                     case "delroles":
+                        //todo
                         //args: STRING:category
                         break;
                     case "delcategory":
+                        //todo
                         //args: STRING:category
                         break;
                     case "modifycategory":
+                        //todo
                         //args: STRING:category, ?STRING:emoji, ?STRING:buttonstyle, ?STRING:description, ?INT:minnum, ?INT:maxnum
                         break;
                 }
@@ -328,8 +344,6 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         }
 
     }
-
-    ObjectMapper mapper = new ObjectMapper();
 
     public String asString(Object object) {
         try {
