@@ -1,36 +1,62 @@
 package uk.co.hexillium.rhul.compsoc;
 
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.ReadyEvent;
+import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
+import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
+import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nonnull;
 
 public class EventManager implements EventListener{
 
     CommandDispatcher dispatcher;
+    final static private Logger logger = LogManager.getLogger(EventManager.class);
 
     EventManager(){}
 
+    volatile boolean missingDispatcher = true;
+    JDA jda;
+
     public void setDispatcher(CommandDispatcher dispatcher) {
         this.dispatcher = dispatcher;
+        if (!missingDispatcher){
+            dispatcher.onLoad(jda);
+        }
+        missingDispatcher = false;
     }
 
     @Override
     public void onEvent(@Nonnull GenericEvent event) {
         if (event instanceof ReadyEvent){
             System.out.println("Ready!");
-            dispatcher.onLoad(event.getJDA());
+            if (missingDispatcher){
+                missingDispatcher = false;
+                jda = event.getJDA();
+            } else {
+                dispatcher.onLoad(event.getJDA());
+            }
+        }
+        if (dispatcher == null){
+            logger.debug("Event failed due to missing dispatcher.");
+            return;
         }
         if (event instanceof GuildMessageReceivedEvent){
-            if (dispatcher != null)
                 dispatcher.dispatchCommand((GuildMessageReceivedEvent) event);
-        }
-        if (event instanceof PrivateMessageReceivedEvent){
-            if (dispatcher != null)
+        } else if (event instanceof PrivateMessageReceivedEvent){
                 dispatcher.dispatchCommand((PrivateMessageReceivedEvent) event);
+        } else if (event instanceof ButtonClickEvent){
+                dispatcher.dispatchButtonPress((ButtonClickEvent) event);
+        } else if (event instanceof SlashCommandEvent){
+            dispatcher.handleSlashCommand((SlashCommandEvent) event);
+        } else if (event instanceof SelectionMenuEvent){
+            dispatcher.dispatchSelectionMenu((SelectionMenuEvent) event);
         }
     }
 }

@@ -1,12 +1,11 @@
 package uk.co.hexillium.rhul.compsoc.commands;
 
-import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
-import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
-import net.dv8tion.jda.api.entities.Message;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
+import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.Disabled;
 
 @Disabled

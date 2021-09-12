@@ -14,7 +14,6 @@ import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.DuplicateEntry;
-import uk.co.hexillium.rhul.compsoc.persistence.entities.VerificationMessage;
 
 import java.util.Arrays;
 import java.util.List;

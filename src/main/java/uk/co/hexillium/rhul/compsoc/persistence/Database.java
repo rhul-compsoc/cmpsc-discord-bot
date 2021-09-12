@@ -29,6 +29,8 @@ public class Database {
     public static TriviaStorage TRIVIA_STORAGE;
     public static MessageStorage MESSAGE_STORAGE;
     public static GameBindingStorage GAME_BINDING_STORAGE;
+    public static PollStorage POLL_STORAGE;
+    public static RoleMenuStorage ROLE_MENU_STORAGE;
 
     public static Database getInstance(){
         return instance;
@@ -75,6 +77,8 @@ public class Database {
         TRIVIA_STORAGE = new TriviaStorage(source);
         MESSAGE_STORAGE = new MessageStorage(source);
         GAME_BINDING_STORAGE = new GameBindingStorage(source);
+        ROLE_MENU_STORAGE = new RoleMenuStorage(source);
+        POLL_STORAGE = new PollStorage(source);
     }
 
     public HikariDataSource getSource(){

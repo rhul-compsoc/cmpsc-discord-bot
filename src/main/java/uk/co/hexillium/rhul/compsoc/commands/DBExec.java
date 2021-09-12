@@ -5,7 +5,6 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 
-import javax.xml.crypto.Data;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;

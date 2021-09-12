@@ -1,9 +1,9 @@
 package uk.co.hexillium.rhul.compsoc.commands;
 
-import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
-import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.Permission;
+import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
+import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import java.util.Arrays;

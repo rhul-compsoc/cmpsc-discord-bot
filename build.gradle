@@ -12,7 +12,7 @@ version '1.0'
 
 repositories {
     mavenCentral()
-    jcenter()
+//    jcenter()
     maven {
         name 'm2-dv8tion'
         url 'https://m2.dv8tion.net/releases'
@@ -34,15 +34,16 @@ tasks.withType(JavaCompile) {
 dependencies {
     // https://mvnrepository.com/artifact/com.sparkjava/spark-core
     compile group: 'com.sparkjava', name: 'spark-core', version: '2.9.3'
-    implementation 'net.dv8tion:JDA:4.2.1_255'
+    implementation 'net.dv8tion:JDA:4.3.0_323'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.0-rc1'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.13.1'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.14.1'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-slf4j18-impl
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j18-impl', version: '2.13.1'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-slf4j18-impl', version: '2.14.1'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-api
-    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.13.1'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.14.1'
     // https://mvnrepository.com/artifact/io.github.classgraph/classgraph
-    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.65'
-    implementation 'com.zaxxer:HikariCP:3.4.5'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.10.0'
+    implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.114'
+    implementation 'com.zaxxer:HikariCP:5.0.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.12.4'
 }
