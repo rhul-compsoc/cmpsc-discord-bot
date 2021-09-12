@@ -10,9 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.MemberXPData;
 
-import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.MathContext;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 

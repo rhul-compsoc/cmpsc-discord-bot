@@ -4,7 +4,6 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.DuplicateEntry;
-import uk.co.hexillium.rhul.compsoc.persistence.entities.Student;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.VerificationMessage;
 
 import java.sql.Connection;

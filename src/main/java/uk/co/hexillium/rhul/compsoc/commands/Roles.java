@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.MessageBuilder;
 import net.dv8tion.jda.api.entities.Emoji;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
@@ -12,7 +11,6 @@ import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
-import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
@@ -20,11 +18,9 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.Button;
-import net.dv8tion.jda.api.interactions.components.ButtonStyle;
 import net.dv8tion.jda.api.interactions.components.Component;
 import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
 import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
-import net.dv8tion.jda.internal.interactions.SelectionMenuImpl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
@@ -34,7 +30,6 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionMenu;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -235,7 +230,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         builder.setMinValues(cat.getMin());
         if (cat.getMin() > 0 || cat.getMax() < 25) {
             String limits = cat.getMin() > 0 ? "\nYou must select at least " + cat.getMin() + " roles." : "";
-            limits += cat.getMax() < 25 ? "\nYou must select fewer than " + (cat.getMax() - 1) + " roles. " : "";
+            limits += cat.getMax() < 25 ? "\nYou must select fewer than " + (cat.getMax() + 1) + " roles. " : "";
             emb.addField("Special Limits:", "The following limits apply to this menu:" + limits, false);
         }
 //        hook.sendMessageEmbeds(emb.build()).setEphemeral(true).addActionRow(builder.build()).queue();

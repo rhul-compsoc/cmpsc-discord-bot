@@ -1,13 +1,10 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
-import net.dv8tion.jda.api.entities.GuildChannel;
 import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.MessageType;
 import net.dv8tion.jda.api.entities.TextChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.intellij.lang.annotations.Language;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -22,19 +19,19 @@ public class MessageStorage {
     private HikariDataSource source;
     private static final Logger logger = LogManager.getLogger(MessageStorage.class);
 
-    @Language("SQL")
+
     private static final String insertMessage =
             "insert into messages(channel_id, message_id, modified_timestamp, author_id, message_content, attachment_url) VALUES " +
                     "(?, ?, ?, ?, ?, ?) on conflict do nothing;";
 
-    @Language("SQL")
+
     private static final String deleteMessage =
             "update messages set deleted = true where message_id = ? and modified_timestamp = (select max(modified_timestamp) from messages where message_id = ?)";
 
-    @Language("SQL")
+
     private static final String insertChannel = "insert into channels (channel_snowflake, channel_name, channel_permissions, channel_description) values (?, ?, ?, ?) on conflict do nothing;";
 
-    @Language("SQL")
+
     private static final String updateChannel = "update channels set channel_name = ? where channel_snowflake = ?;";
 
     MessageStorage(HikariDataSource source){

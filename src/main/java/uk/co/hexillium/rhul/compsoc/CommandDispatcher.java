@@ -3,29 +3,27 @@ package uk.co.hexillium.rhul.compsoc;
 import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
+import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
-import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
 import net.dv8tion.jda.api.requests.restaction.CommandListUpdateAction;
-import uk.co.hexillium.rhul.compsoc.commands.ComponentInteractionHandler;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.commands.Command;
+import uk.co.hexillium.rhul.compsoc.commands.ComponentInteractionHandler;
 import uk.co.hexillium.rhul.compsoc.commands.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
-import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -161,10 +159,12 @@ public class CommandDispatcher {
         updateCmds.queue();
 
     }
+
     public void loadScheduler(JobScheduler scheduler) {
         for (Command c : commands) {
             c.setScheduler(scheduler);
         }
+        scheduler.initialise();
     }
 
     public void dispatchCommand(GuildMessageReceivedEvent event) {
@@ -193,7 +193,11 @@ public class CommandDispatcher {
             return;
         }
         logger.info("Member " + event.getMember() + " executed " + handler.getClass().getName() + " slash command " + event.getCommandPath());
-        handler.handleSlashCommand(event);
+        try {
+            handler.handleSlashCommand(event);
+        } catch (Exception ex){
+            logger.error("Failed to execute slash command ", ex);
+        }
     }
 
     private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){

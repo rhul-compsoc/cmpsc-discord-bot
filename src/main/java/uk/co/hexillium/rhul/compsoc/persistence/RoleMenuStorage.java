@@ -1,16 +1,13 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
-import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelection;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionCategory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionMenu;
-import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
 import javax.annotation.CheckReturnValue;
-import javax.xml.crypto.Data;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;

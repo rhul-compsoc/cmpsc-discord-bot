@@ -1,8 +1,5 @@
 package uk.co.hexillium.rhul.compsoc.persistence.entities;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import javax.annotation.Nullable;
 
 public class RoleSelection {

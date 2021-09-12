@@ -1,10 +1,8 @@
 package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
-import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -12,7 +10,10 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildXPData;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.MemberXPData;
 
 import java.sql.*;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class ExperienceStorage {
 

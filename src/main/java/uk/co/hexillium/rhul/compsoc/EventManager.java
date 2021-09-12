@@ -9,11 +9,8 @@ import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
-import net.dv8tion.jda.api.interactions.components.ButtonInteraction;
-import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import uk.co.hexillium.rhul.compsoc.commands.SlashCommandHandler;
 
 import javax.annotation.Nonnull;
 
