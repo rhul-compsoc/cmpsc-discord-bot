@@ -24,6 +24,7 @@ import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
+import uk.co.hexillium.rhul.compsoc.persistence.RoleMenuStorage;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelection;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionCategory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionMenu;
@@ -60,6 +61,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 
     @Override
     public void handleSelectionMenuInteraction(SelectionMenuEvent interaction) {
+        if (interaction.getMember() == null) return;
         String[] components = interaction.getComponentId().split("\\|", 2);
         switch (components[0]) {
             case "s:ro:r":  //add roles to member
@@ -67,6 +69,11 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 List<String> roleIDs = interaction.getValues();
 //                interaction.deferReply(true).queue();
                 long parsedCatID = Long.parseLong(components[1]);
+                RoleSelectionCategory cat = Database.ROLE_MENU_STORAGE.getCategoryFromID(parsedCatID, interaction.getGuild().getIdLong(), false);
+                if (interaction.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
+                    interaction.reply("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").setEphemeral(true).queue();
+                    return;
+                }
                 List<RoleSelection> roleOptions = Database.ROLE_MENU_STORAGE.getRolesForCategory(interaction.getGuild().getIdLong(), parsedCatID);
                 //add all roles that appear in roleIDs, and remove all roles that are only in roleOptions
                 List<String> toRemove = roleOptions.stream().map(rs -> String.valueOf(rs.getRoleID())).collect(Collectors.toList());
@@ -131,7 +138,8 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "emoji", "The emoji used to represent this category", false)
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
                                 .addOption(OptionType.INTEGER, "minnum", "The minimum number of roles from this category that can be selected (default: 0)", false)
-                                .addOption(OptionType.INTEGER, "maxnum", "The maximum number of roles from this category that can be selected (default: 25)", false),
+                                .addOption(OptionType.INTEGER, "maxnum", "The maximum number of roles from this category that can be selected (default: 25)", false)
+                                .addOption(OptionType.ROLE, "reqrole", "The required role that is needed in order to use this category.  Leave blank or use @everyone to allow everyone.", false),
                         new SubcommandData("addrole", "Add a role to an existing category")
                                 .addOption(OptionType.STRING, "category", "The name of the category to add this role to", true)
                                 .addOption(OptionType.ROLE, "role", "The role to add", true)
@@ -156,6 +164,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
                                 .addOption(OptionType.INTEGER, "minnum", "The minimum number of roles from this category that can be selected (default: 0)", false)
                                 .addOption(OptionType.INTEGER, "maxnum", "The maximum number of roles from this category that can be selected (default: 25)", false)
+                                .addOption(OptionType.ROLE, "reqrole", "The required role that is needed in order to use this category.  Leave blank or use @everyone to allow everyone.", false)
 
                 ));
         return commands;
@@ -243,6 +252,10 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
     @Override
     public void handleSlashCommand(SlashCommandEvent event) {
         if (event.getMember() == null) return;
+        if (event.getGuild() == null) {
+            event.reply("Not run from a guild context; exiting.").setEphemeral(true).queue();
+            return;
+        }
         switch (event.getName()) {
             case "roles":
                 //show the menu
@@ -269,17 +282,20 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 OptionMapping catOpt = event.getOption("category");
                 OptionMapping roleOpt = event.getOption("role");
                 OptionMapping colourOpt = event.getOption("colour");
+                OptionMapping reqroleOpt = event.getOption("reqrole");
                 OptionMapping Omin = event.getOption("minnum");
                 int min = Omin == null ? 0 : (int) Math.min(25, Omin.getAsLong());
                 OptionMapping Omax = event.getOption("maxnum");
                 int max = Omax == null ? 25 : (int) Math.max(25, Omax.getAsLong());
+                long requiredRole = reqroleOpt == null ? event.getGuild().getIdLong() : reqroleOpt.getAsLong();
                 switch (event.getSubcommandName()) {
-                    case "list":
+                    case "list": {
                         //args: ?STRING:catname
                         ObjectMapper mapper = new ObjectMapper();
                         event.reply(asString(Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), true))).queue();
-                        break;
-                    case "addcategory":
+                    }
+                    break;
+                    case "addcategory": {
                         //args: STRING:name, STRING:buttonstyle, ?STRING:emoji, ?STRING:description, ?INT:minnum, ?INT:maxnum
                         if (min > max) {
                             event.reply("Cannot have a larger min than max.").setEphemeral(true).queue();
@@ -291,12 +307,16 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 descOpt == null ? null : descOpt.getAsString(),
                                 emojiOpt == null ? null : emojiOpt.getAsString(),
                                 buttOpt == null ? null : buttOpt.getAsString(),
-                                -1, min,
-                                max, Collections.emptyList()
+                                -1,
+                                min,
+                                max,
+                                Collections.emptyList(),
+                                requiredRole
                         ));
                         event.reply("Successfully inserted new category.").setEphemeral(true).queue();
-                        break;
-                    case "addrole":
+                    }
+                    break;
+                    case "addrole": {
                         //args: STRING:category, ROLE:role, ?STRING:description, ?INT:colour, ?STRING:emoji
                         if (roleOpt == null || catOpt == null) {
                             return;
@@ -317,22 +337,90 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         } catch (IllegalArgumentException ex) {
                             event.reply(ex.getMessage()).setEphemeral(true).queue();
                         }
-                        break;
-                    case "delrole":
-                        //todo
-                        //args: STRING:category, ROLE:role
-                        break;
-                    case "delroles":
+                    }
+                    break;
+                    case "delrole": {
+                        if (catOpt == null || roleOpt == null) {
+                            event.reply("Non-null options supplied as null. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), true);
+                        RoleSelectionCategory cat = menu.getCategories().stream().filter(menuStr -> menuStr.getName().equalsIgnoreCase(catOpt.getAsString())).findAny().orElse(null);
+                        if (cat == null) {
+                            event.reply("No category by the name `" + catOpt.getAsString() + "` was found. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        if (cat.getRoles().stream().map(RoleSelection::getRoleID).noneMatch(roleId -> roleId.equals(roleOpt.getAsLong()))) {
+                            event.reply("No roles by that ID were found in this category. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        Database.ROLE_MENU_STORAGE.deleteRoleOption(cat.getCategoryID(), event.getGuild().getIdLong(), roleOpt.getAsLong());
+                        event.reply("Successfully removed all instances of that roll in this category.").setEphemeral(true).queue();
+                    }
+                    break;
+                    case "delroles": {
+                        event.reply("Not implemented yet.  Please use the single deletes instead.").setEphemeral(true).queue();
                         //todo
                         //args: STRING:category
-                        break;
-                    case "delcategory":
-                        //todo
-                        //args: STRING:category
-                        break;
+                    }
+                    break;
+                    case "delcategory": {
+                        if (catOpt == null) {
+                            event.reply("Non-null options supplied as null. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), false);
+                        RoleSelectionCategory cat = menu.getCategories().stream().filter(menuStr -> menuStr.getName().equalsIgnoreCase(catOpt.getAsString())).findAny().orElse(null);
+                        if (cat == null) {
+                            event.reply("No category by the name `" + catOpt.getAsString() + "` was found. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        Database.ROLE_MENU_STORAGE.deleteCategory(cat.getCategoryID(), cat.getGuildID());
+                        event.reply("Successfully deleted category.").setEphemeral(true).queue();
+                    }
+                    break;
                     case "modifycategory":
-                        //todo
-                        //args: STRING:category, ?STRING:emoji, ?STRING:buttonstyle, ?STRING:description, ?INT:minnum, ?INT:maxnum
+                        if (catOpt == null) {
+                            event.reply("Non-null options supplied as null. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), false);
+                        RoleSelectionCategory cat = menu.getCategories().stream().filter(menuStr -> menuStr.getName().equalsIgnoreCase(catOpt.getAsString())).findAny().orElse(null);
+                        if (cat == null) {
+                            event.reply("No category by the name `" + catOpt.getAsString() + "` was found. (Nothing changed).").setEphemeral(true).queue();
+                            return;
+                        }
+                        boolean modified = false;
+                        if (emojiOpt != null){
+                            cat.setEmoji(emojiOpt.getAsString());
+                            modified = true;
+                        }
+                        if (buttOpt != null){
+                            cat.setStyle(buttOpt.getAsString());
+                            modified = true;
+                        }
+                        if (descOpt != null){
+                            cat.setDescription(descOpt.getAsString());
+                            modified = true;
+                        }
+                        if (Omin != null){
+                            cat.setMin(min);
+                            modified = true;
+                        }
+                        if (Omax != null){
+                            cat.setMax(max);
+                            modified = true;
+                        }
+                        if (reqroleOpt != null){
+                            cat.setRequiredRoleId(requiredRole);
+                            modified = true;
+                        }
+                        if (!modified){
+                            event.reply("No optional arguments were presented, and nothing has been changed.").setEphemeral(true).queue();
+                            return;
+                        }
+                        Database.ROLE_MENU_STORAGE.updateSelectionCategory(event.getGuild().getIdLong(), cat.getCategoryID(), cat);
+                        event.reply("Updated Category.").setEphemeral(true).queue();
                         break;
                 }
                 break;

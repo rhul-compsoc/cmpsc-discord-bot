@@ -24,7 +24,7 @@ public class RoleMenuStorage {
 
     static String SELECT_CATEGORIES = "select " +
             "       guild_id, category_name, category_description, category_emoji, category_button_type, category_id, " +
-            "       category_min_selection, category_max_selection " +
+            "       category_min_selection, category_max_selection, category_required_role_snowflake " +
             "from role_categories where guild_id = ?;";
     static String SELECT_CAT_ROLES = "select\n" +
             "       guildid, roleid, role_name, colour, emoji, description, categoryid\n" +
@@ -34,13 +34,13 @@ public class RoleMenuStorage {
             "from role_options where guildid = ?;";
 
     static String INSERT_CATEGORY = "insert into role_categories (guild_id, category_name, category_description, category_emoji, category_button_type,\n" +
-            "                             category_min_selection, category_max_selection)\n" +
-            "values (?, ?, ?, ?, ?, ?, ?);";
+            "                             category_min_selection, category_max_selection, category_required_role_snowflake)\n" +
+            "values (?, ?, ?, ?, ?, ?, ?, ?);";
     static String INSERT_ROLE = "insert into role_options (guildid, roleid, role_name, colour, emoji, description, categoryid)\n" +
             "values (?, ?, ?, ?, ?, ?, ?);";
 
     static String DELETE_CATEGORY = "delete from role_categories where category_id = ? and guild_id = ?;";
-    static String DELETE_ROLE_OPTION = "delete from role_options where categoryid = ? and roleid = ?;";
+    static String DELETE_ROLE_OPTION = "delete from role_options where categoryid = ? and guildid = ? and roleid = ?;";
 
     static String UPDATE_CATEGORY = "update role_categories\n" +
             "set category_button_type = ?,\n" +
@@ -59,17 +59,44 @@ public class RoleMenuStorage {
             "where guildid = ? and categoryid = ? and roleid = ?;";
 
     static String GET_CATEGORY_DATA = "select guild_id,\n" +
-            "       category_name,\n" +
-            "       category_description,\n" +
-            "       category_emoji,\n" +
-            "       category_button_type,\n" +
-            "       category_id,\n" +
-            "       category_min_selection,\n" +
-            "       category_max_selection\n" +
+            "       category_name, " +
+            "       category_description, " +
+            "       category_emoji, " +
+            "       category_button_type, " +
+            "       category_id, " +
+            "       category_min_selection, " +
+            "       category_max_selection, " +
+            "       category_required_role_snowflake " +
             "from role_categories where category_id = ? and guild_id = ?;";
+
+    static String UPDATE_CATEGORY_SETTINGS = "update role_categories set category_emoji = ?, category_button_type = ?,  " +
+            "                           category_description = ?, category_min_selection = ?, " +
+            "                           category_max_selection = ?, category_required_role_snowflake = ? " +
+            "where guild_id = ? and category_id = ?;";
 
     public RoleMenuStorage(HikariDataSource source) {
         this.source = source;
+    }
+
+    public void updateSelectionCategory(long guildId, long categoryId, RoleSelectionCategory newData){
+        try (Connection connection = source.getConnection();
+                PreparedStatement statement = connection.prepareStatement(UPDATE_CATEGORY_SETTINGS)){
+
+            statement.setString(1, newData.getEmoji());
+            statement.setString(2, newData.getStyle().name());
+            statement.setString(3, newData.getDescription());
+            statement.setInt(4, newData.getMin());
+            statement.setInt(5, newData.getMax());
+            statement.setLong(6, newData.getRequiredRoleId());
+
+            statement.setLong(7, guildId);
+            statement.setLong(8, categoryId);
+
+            statement.executeUpdate();
+
+        } catch (SQLException ex){
+            LOGGER.error("Failed to update role category ", ex);
+        }
     }
 
     @CheckReturnValue
@@ -109,7 +136,8 @@ public class RoleMenuStorage {
                         set.getLong(6),
                         set.getInt(7),
                         set.getInt(8),
-                        new ArrayList<>()
+                        new ArrayList<>(),
+                        set.getLong(9)
                 );
                 categories.add(category);
             }
@@ -202,7 +230,8 @@ public class RoleMenuStorage {
                     set.getLong(6),
                     set.getInt(7),
                     set.getInt(8),
-                    new ArrayList<>()
+                    new ArrayList<>(),
+                    set.getInt(9)
             );
         } catch (SQLException ex) {
             LOGGER.error("Failed to fetch selection menu category data", ex);
@@ -230,6 +259,7 @@ public class RoleMenuStorage {
             statement.setString(5, category.getStyle().name());
             statement.setInt(6, category.getMin());
             statement.setInt(7, category.getMax());
+            statement.setLong(8, category.getRequiredRoleId());
 
             statement.executeUpdate();
 
@@ -283,12 +313,13 @@ public class RoleMenuStorage {
         }
     }
 
-    public void deleteRoleOption(long categoryID, long roleID) {
+    public void deleteRoleOption(long categoryID, long guildID, long roleID) {
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(DELETE_ROLE_OPTION)) {
 
             statement.setLong(1, categoryID);
-            statement.setLong(2, roleID);
+            statement.setLong(2, guildID);
+            statement.setLong(3, roleID);
 
             statement.executeUpdate();
 
