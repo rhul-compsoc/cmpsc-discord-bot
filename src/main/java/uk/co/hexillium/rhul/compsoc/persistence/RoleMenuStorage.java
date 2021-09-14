@@ -25,7 +25,7 @@ public class RoleMenuStorage {
     static String SELECT_CATEGORIES = "select " +
             "       guild_id, category_name, category_description, category_emoji, category_button_type, category_id, " +
             "       category_min_selection, category_max_selection, category_required_role_snowflake " +
-            "from role_categories where guild_id = ?;";
+            "from role_categories where guild_id = ? order by category_id;";
     static String SELECT_CAT_ROLES = "select\n" +
             "       guildid, roleid, role_name, colour, emoji, description, categoryid\n" +
             "from role_options where guildid = ? and categoryid = ?;";

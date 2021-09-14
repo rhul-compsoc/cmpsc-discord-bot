@@ -70,7 +70,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 //                interaction.deferReply(true).queue();
                 long parsedCatID = Long.parseLong(components[1]);
                 RoleSelectionCategory cat = Database.ROLE_MENU_STORAGE.getCategoryFromID(parsedCatID, interaction.getGuild().getIdLong(), false);
-                if (interaction.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
+                if (cat.getRequiredRoleId() != interaction.getGuild().getIdLong() && interaction.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
                     interaction.reply("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").setEphemeral(true).queue();
                     return;
                 }
@@ -212,6 +212,10 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         List<RoleSelection> roles = cat.getRoles();
         if (roles.size() > 25) {
             hook.editMessage("There are too many roles.  Please contact an admin.").setEmbeds().setActionRows().queue();
+            return;
+        }
+        if (cat.getRequiredRoleId() != member.getGuild().getIdLong() && member.getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
+            hook.editMessage("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").queue();
             return;
         }
         SelectionMenu.Builder builder = SelectionMenu.create("s:ro:r|" + roleCat);
