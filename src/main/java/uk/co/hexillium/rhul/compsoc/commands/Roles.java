@@ -29,6 +29,7 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelection;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionCategory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionMenu;
 
+import javax.annotation.Nonnull;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,6 +48,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 
     @Override
     public void handleButtonInteraction(ButtonClickEvent interaction, String button) {
+        if (interaction.getMember() == null) return;
         String[] components = interaction.getComponentId().split("\\|", 2);
         switch (components[0]) {
             case "b:ro:c":
@@ -56,6 +58,14 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 //                interaction.deferReply(true).queue();
                 handleRoleCategoryMenu(interaction.getMember(), catID, interaction);
                 break;
+            case "b:ro:m":
+                interaction.editMessageEmbeds(getMenuEmbedBuilder(interaction.getMember()).build())
+                        .setContent("").setActionRows(
+                                getMenuComponents(interaction.getMember())
+                                        .stream()
+                                        .map(ActionRow::of)
+                                        .collect(Collectors.toList())
+                        ).queue();
         }
     }
 
@@ -70,7 +80,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
 //                interaction.deferReply(true).queue();
                 long parsedCatID = Long.parseLong(components[1]);
                 RoleSelectionCategory cat = Database.ROLE_MENU_STORAGE.getCategoryFromID(parsedCatID, interaction.getGuild().getIdLong(), false);
-                if (cat.getRequiredRoleId() != interaction.getGuild().getIdLong() && interaction.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
+                if (cat.getRequiredRoleId() != interaction.getGuild().getIdLong() && interaction.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())) {
                     interaction.reply("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").setEphemeral(true).queue();
                     return;
                 }
@@ -95,7 +105,9 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 List<Role> rolesToRemove = toRemove.stream().map(role -> interaction.getGuild().getRoleById(role)).collect(Collectors.toList());
                 try {
                     interaction.getGuild().modifyMemberRoles(interaction.getMember(), rolesToAdd, rolesToRemove).queue();
-                    interaction.editMessage("Roles updated!").setEmbeds().setActionRows().queue();
+                    interaction.editMessage("Roles updated!  \n\nPress the button below to get some more roles.").setEmbeds().setActionRows(
+                            ActionRow.of(Button.primary("b:ro:m", "More Roles"))
+                    ).queue();
                 } catch (Exception ex) {
                     interaction.editMessage("Failed to modify roles.  Please report this: " + ex.getMessage()).setEmbeds().setActionRows().queue();
                     logger.error("Failed to update roles " + rolesToAdd + " rem:" + rolesToRemove, ex);
@@ -115,6 +127,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         handles.add("m:ro:a"); //menu:roles:assign
         handles.add("m:ro:d"); //menu:roles:delete
         handles.add("b:ro:c"); //buttons:roles:category
+        handles.add("b:ro:m"); //buttons:roles:menu
         handles.add("s:ro:r"); //selection:roles:(show)roles
         return handles;
     }
@@ -171,13 +184,25 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
     }
 
     public void handleShowRoles(Member member, InteractionHook hook) {
-        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(member.getGuild().getIdLong(), true);
-        EmbedBuilder eb = new EmbedBuilder();
-        eb.setTitle("Role Menu");
-        eb.setDescription("Select a category from below to be offered roles for that category!");
-        eb.setAuthor(member.getEffectiveName(), null, member.getUser().getEffectiveAvatarUrl());
-        eb.setTimestamp(Instant.now());
+        EmbedBuilder eb = getMenuEmbedBuilder(member);
+        List<List<Component>> components = getMenuComponents(member);
 
+        if (components.size() > 5) {
+            hook.sendMessage("Error! Too many options! Please notify an admin.").setEphemeral(true).queue();
+            return;
+        }
+        hook.sendMessageEmbeds(eb.build())
+                .addActionRows(
+                        components.stream()
+                                .map(ActionRow::of)
+                                .collect(Collectors.toList())
+                )
+                .setEphemeral(true).queue();
+//        hook.editOriginalEmbeds(eb.build()).setActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).queue();
+    }
+
+    private List<List<Component>> getMenuComponents(Member member) {
+        RoleSelectionMenu menu = Database.ROLE_MENU_STORAGE.getSelectionMenu(member.getGuild().getIdLong(), true);
         List<Component> components = menu.getCategories().stream().map(category -> {
                     Button button = Button.of(category.getStyle(),
                             "b:ro:c|" + category.getCategoryID(), //buttons:roles:category
@@ -188,12 +213,6 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                     return category.getRoles().size() == 0 ? button.asDisabled() : button;
                 }
         ).collect(Collectors.toList());
-
-        if (components.size() > 25) {
-            hook.sendMessage("Error! Too many options! Please notify an admin.").setEphemeral(true).queue();
-            return;
-        }
-
         //break the big list down into lists of length 5.
         List<List<Component>> builder = new ArrayList<>();
         for (int i = 0; i < components.size(); i++) {
@@ -202,9 +221,17 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             }
             builder.get(i / 5).add(components.get(i));
         }
+        return builder;
+    }
 
-        hook.sendMessageEmbeds(eb.build()).addActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).setEphemeral(true).queue();
-//        hook.editOriginalEmbeds(eb.build()).setActionRows(builder.stream().map(ActionRow::of).collect(Collectors.toList())).queue();
+    @Nonnull
+    private EmbedBuilder getMenuEmbedBuilder(Member member) {
+        EmbedBuilder eb = new EmbedBuilder();
+        eb.setTitle("Role Menu");
+        eb.setDescription("Select a category from below to be offered roles for that category!");
+        eb.setAuthor(member.getEffectiveName(), null, member.getUser().getEffectiveAvatarUrl());
+        eb.setTimestamp(Instant.now());
+        return eb;
     }
 
     public void handleRoleCategoryMenu(Member member, long roleCat, ButtonClickEvent hook) {
@@ -214,7 +241,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             hook.editMessage("There are too many roles.  Please contact an admin.").setEmbeds().setActionRows().queue();
             return;
         }
-        if (cat.getRequiredRoleId() != member.getGuild().getIdLong() && member.getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())){
+        if (cat.getRequiredRoleId() != member.getGuild().getIdLong() && member.getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())) {
             hook.editMessage("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").queue();
             return;
         }
@@ -243,7 +270,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         builder.setMinValues(cat.getMin());
         if (cat.getMin() > 0 || cat.getMax() < 25) {
             String limits = cat.getMin() > 0 ? "\nYou must select at least " + cat.getMin() + " roles." : "";
-            limits += cat.getMax() < 25 ? "\nYou must select fewer than " + (cat.getMax() + 1) + " roles. " : "";
+            limits += cat.getMax() < 25 ? "\nYou can select a maximum of " + cat.getMax() + " role" + (cat.getMax() > 1 ? "s" : "") + ". " : "";
             emb.addField("Special Limits:", "The following limits apply to this menu:" + limits, false);
         }
 //        hook.sendMessageEmbeds(emb.build()).setEphemeral(true).addActionRow(builder.build()).queue();
@@ -288,9 +315,11 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 OptionMapping colourOpt = event.getOption("colour");
                 OptionMapping reqroleOpt = event.getOption("reqrole");
                 OptionMapping Omin = event.getOption("minnum");
-                int min = Omin == null ? 0 : (int) Math.min(25, Omin.getAsLong());
+                int min = Omin == null ? 0 : (int) Math.max(0, Omin.getAsLong());
+                min = Math.min(25, min);
                 OptionMapping Omax = event.getOption("maxnum");
-                int max = Omax == null ? 25 : (int) Math.max(25, Omax.getAsLong());
+                int max = Omax == null ? 25 : (int) Math.min(25, Omax.getAsLong());
+                max = Math.max(0, max);
                 long requiredRole = reqroleOpt == null ? event.getGuild().getIdLong() : reqroleOpt.getAsLong();
                 switch (event.getSubcommandName()) {
                     case "list": {
@@ -395,31 +424,35 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                             return;
                         }
                         boolean modified = false;
-                        if (emojiOpt != null){
+                        if (emojiOpt != null) {
                             cat.setEmoji(emojiOpt.getAsString());
                             modified = true;
                         }
-                        if (buttOpt != null){
+                        if (buttOpt != null) {
                             cat.setStyle(buttOpt.getAsString());
                             modified = true;
                         }
-                        if (descOpt != null){
+                        if (descOpt != null) {
                             cat.setDescription(descOpt.getAsString());
                             modified = true;
                         }
-                        if (Omin != null){
+                        if (Omin != null) {
                             cat.setMin(min);
                             modified = true;
                         }
-                        if (Omax != null){
+                        if (Omax != null) {
                             cat.setMax(max);
                             modified = true;
                         }
-                        if (reqroleOpt != null){
+                        if (reqroleOpt != null) {
                             cat.setRequiredRoleId(requiredRole);
                             modified = true;
                         }
-                        if (!modified){
+                        if (cat.getMin() > cat.getMax()){
+                            event.reply("Minimum may not be more than the maximum. (Nothing has been changed)").queue();
+                            return;
+                        }
+                        if (!modified) {
                             event.reply("No optional arguments were presented, and nothing has been changed.").setEphemeral(true).queue();
                             return;
                         }
