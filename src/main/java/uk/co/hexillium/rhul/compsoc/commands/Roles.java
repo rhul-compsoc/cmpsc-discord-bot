@@ -359,7 +359,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                             return;
                         }
                         Database.ROLE_MENU_STORAGE.deleteRoleOption(cat.getCategoryID(), event.getGuild().getIdLong(), roleOpt.getAsLong());
-                        event.reply("Successfully removed all instances of that roll in this category.").setEphemeral(true).queue();
+                        event.reply("Successfully removed all instances of that role in this category.").setEphemeral(true).queue();
                     }
                     break;
                     case "delroles": {
