@@ -139,7 +139,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
                                 .addOption(OptionType.INTEGER, "minnum", "The minimum number of roles from this category that can be selected (default: 0)", false)
                                 .addOption(OptionType.INTEGER, "maxnum", "The maximum number of roles from this category that can be selected (default: 25)", false)
-                                .addOption(OptionType.ROLE, "reqrole", "The required role that is needed in order to use this category.  Leave blank or use @everyone to allow everyone.", false),
+                                .addOption(OptionType.ROLE, "reqrole", "The required role for this category.  Leave blank or use @everyone to allow everyone.", false),
                         new SubcommandData("addrole", "Add a role to an existing category")
                                 .addOption(OptionType.STRING, "category", "The name of the category to add this role to", true)
                                 .addOption(OptionType.ROLE, "role", "The role to add", true)
