@@ -269,8 +269,9 @@ public class CommandDispatcher {
         String[] components = event.getComponentId().split("\\|", 2);
         ComponentInteractionHandler handler = buttonMap.get(components[0]);
         logger.info("User " + event.getUser() + " dispatched " + handler.getClass().getName() + " with button interaction + " + event.getComponentId());
+        String dataTag = components.length == 1 ? "" : components[1];
         Database.runLater(() -> {
-            handler.handleButtonInteraction(event, components[1]);
+            handler.handleButtonInteraction(event, dataTag);
         });
     }
 
