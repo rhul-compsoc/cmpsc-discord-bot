@@ -242,7 +242,9 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
             return;
         }
         if (cat.getRequiredRoleId() != member.getGuild().getIdLong() && member.getRoles().stream().noneMatch(role -> role.getIdLong() == cat.getRequiredRoleId())) {
-            hook.editMessage("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.").queue();
+            hook.editMessage("You do not have the required role, <@&" + cat.getRequiredRoleId() + "> to use this menu.")
+                    .setEmbeds()
+                    .setActionRows(ActionRow.of(Button.primary("b:ro:m", "More Roles"))).queue();
             return;
         }
         SelectionMenu.Builder builder = SelectionMenu.create("s:ro:r|" + roleCat);
