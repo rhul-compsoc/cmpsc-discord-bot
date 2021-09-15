@@ -66,6 +66,17 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                         .map(ActionRow::of)
                                         .collect(Collectors.toList())
                         ).queue();
+                break;
+                case "b:ro:s":
+                interaction.replyEmbeds(getMenuEmbedBuilder(interaction.getMember()).build())
+                        .setEphemeral(true)
+                        .setContent("").addActionRows(
+                                getMenuComponents(interaction.getMember())
+                                        .stream()
+                                        .map(ActionRow::of)
+                                        .collect(Collectors.toList())
+                        ).queue();
+                break;
         }
     }
 
@@ -128,6 +139,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
         handles.add("m:ro:d"); //menu:roles:delete
         handles.add("b:ro:c"); //buttons:roles:category
         handles.add("b:ro:m"); //buttons:roles:menu
+        handles.add("b:ro:s"); //buttons:roles:seed
         handles.add("s:ro:r"); //selection:roles:(show)roles
         return handles;
     }
@@ -177,7 +189,9 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                                 .addOption(OptionType.STRING, "description", "A description of this role category", false)
                                 .addOption(OptionType.INTEGER, "minnum", "The minimum number of roles from this category that can be selected (default: 0)", false)
                                 .addOption(OptionType.INTEGER, "maxnum", "The maximum number of roles from this category that can be selected (default: 25)", false)
-                                .addOption(OptionType.ROLE, "reqrole", "The required role for this category.  Leave blank or use @everyone to allow everyone.", false)
+                                .addOption(OptionType.ROLE, "reqrole", "The required role for this category.  Leave blank or use @everyone to allow everyone.", false),
+                        new SubcommandData("sendseed", "Send a seed with a custom message that members can use to gain roles.")
+                                .addOption(OptionType.STRING, "message", "The custom message content to send", true)
 
                 ));
         return commands;
@@ -414,7 +428,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         event.reply("Successfully deleted category.").setEphemeral(true).queue();
                     }
                     break;
-                    case "modifycategory":
+                    case "modifycategory": {
                         if (catOpt == null) {
                             event.reply("Non-null options supplied as null. (Nothing changed).").setEphemeral(true).queue();
                             return;
@@ -450,7 +464,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                             cat.setRequiredRoleId(requiredRole);
                             modified = true;
                         }
-                        if (cat.getMin() > cat.getMax()){
+                        if (cat.getMin() > cat.getMax()) {
                             event.reply("Minimum may not be more than the maximum. (Nothing has been changed)").queue();
                             return;
                         }
@@ -460,7 +474,18 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         }
                         Database.ROLE_MENU_STORAGE.updateSelectionCategory(event.getGuild().getIdLong(), cat.getCategoryID(), cat);
                         event.reply("Updated Category.").setEphemeral(true).queue();
-                        break;
+                    }
+                    break;
+                    case "sendseed":
+                        OptionMapping message = event.getOption("message");
+                        if (message == null){
+                            event.reply("You need a message.").setEphemeral(true).queue();
+                            return;
+                        }
+                        event.reply("Message queued!").setEphemeral(true).queue();
+                        event.getTextChannel().sendMessage(message.getAsString())
+                                .setActionRows(ActionRow.of(Button.primary("b:ro:s", "Role Menu")))
+                                .queue();
                 }
                 break;
         }
