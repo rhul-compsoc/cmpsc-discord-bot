@@ -8,9 +8,7 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.Job;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.PriorityQueue;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -49,6 +47,7 @@ public class JobScheduler {
     private final PriorityQueue<Job> upcomingJobs;
     private final ScheduledExecutorService scheduler;
     private final ReentrantReadWriteLock queueLock;
+    private final HashSet<Job> scheduledJobs;
 
     private long recentDBPoll = 0, recentQueuePush = 0;
 
@@ -62,6 +61,7 @@ public class JobScheduler {
         this.database = database;
         this.jda = jda;
         this.triggerMap = new HashMap<>();
+        this.scheduledJobs = new HashSet<>();
         upcomingJobs = new PriorityQueue<>((a, b) -> (int) Math.signum(a.getTargetEpoch() - b.getTargetEpoch()));
         scheduler = Executors.newSingleThreadScheduledExecutor();
         queueLock = new ReentrantReadWriteLock();
@@ -85,6 +85,7 @@ public class JobScheduler {
         queueLock.writeLock().lock();
         try {
             List<Job> newJobs = pollDB();
+            newJobs.removeAll(scheduledJobs);
             newJobs.removeAll(upcomingJobs);
             upcomingJobs.addAll(newJobs);
         } finally {
@@ -93,6 +94,7 @@ public class JobScheduler {
     }
 
     private void registerJob(Job job) {
+        scheduledJobs.add(job);
         scheduler.schedule(() -> {
                     if (job.isCompleted()){
                         logger.debug("Completed job preventing duplicate execution " + job.getJobID());
@@ -102,6 +104,7 @@ public class JobScheduler {
                     job.setCompleted(true);
                     triggerMap.get(job.getJobType()).accept(job.getData());
                     Database.JOB_STORAGE.finishJobById(job.getJobID());
+                    scheduledJobs.remove(job);
                 },
                 Math.max(0, job.getTargetEpoch() - System.currentTimeMillis()),
                 TimeUnit.MILLISECONDS);
