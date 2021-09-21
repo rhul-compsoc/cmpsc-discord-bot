@@ -942,15 +942,17 @@ class BooleanAlgebra {
         } else {
             g2.setColor(Color.BLACK);
         }
+        float strokeWidth = 0;
         if (drawSolution) {
             if (this.solution == null) {
-                g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 200f));
+                strokeWidth = width < 100 ? 1 : width / 200f;
             } else {
-                g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 50f));
+                strokeWidth = width < 100 ? 1 : width / 50f;
             }
         } else {
-            g2.setStroke(new BasicStroke(width < 100 ? 1 : width / 100f));
+            strokeWidth = width < 100 ? 1 : width / 100f;
         }
+        g2.setStroke(new BasicStroke(strokeWidth));
         stage.drawOp(g2, maxWidth, width, 0 + 2, totalHeight - 2);
 //        g2.setColor(Color.BLACK);
         g2.drawLine(maxWidth + width, (totalHeight / 2) + 1, bim.getWidth(), (totalHeight / 2) + 1);
@@ -958,7 +960,11 @@ class BooleanAlgebra {
             int notSize = (int) (2 * Math.max(5d, width / 10d));
             g2.fillOval(maxWidth + width, totalHeight / 2 - (notSize / 2), notSize, notSize);
             g2.setColor(Color.WHITE);
-            g2.fillOval(maxWidth + (width + 1), (totalHeight / 2) - (notSize / 2) + 1, (notSize) - 2, (notSize) - 2);
+            g2.fillOval(
+                    (int) (maxWidth + (width + (strokeWidth/2)) + 1),
+                    (int) ((totalHeight / 2) - (notSize / 2) + (strokeWidth/2) + 1),
+                    (int) ((notSize) - (strokeWidth + 1)),
+                    (int) ((notSize) - (strokeWidth + 1)));
         }
         g2.dispose();
         return bim;
