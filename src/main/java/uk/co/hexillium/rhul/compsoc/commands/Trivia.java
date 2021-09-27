@@ -29,10 +29,7 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
-import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -118,15 +115,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     private void askAlgebra(Question newQ, TextChannel tc) {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         try {
-            ImageWriter jpgWriter = ImageIO.getImageWritersByFormatName("jpg").next();
-            ImageWriteParam jpgWriteParam = jpgWriter.getDefaultWriteParam();
-            jpgWriteParam.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            jpgWriteParam.setCompressionQuality(0.9f);
-            jpgWriter.setOutput(os);
-
-            IIOImage outputImage = new IIOImage(newQ.getImage(), null, null);
-            jpgWriter.write(null, outputImage, jpgWriteParam);
-            jpgWriter.dispose();
+            ImageIO.write(newQ.getImage(), "png", os);
         } catch (IOException ex) {
             LOGGER.error("Failed to send image", ex);
             return;
@@ -929,6 +918,7 @@ class BooleanAlgebra {
         Graphics2D g2 = (Graphics2D) bim.getGraphics();
         g2.setColor(Color.WHITE);
         g2.fillRect(0, 0, bim.getWidth(), bim.getHeight());
+        g2.setColor(Color.BLACK);
         int yOffset = 0;
         int num = 0;
         for (BufferedImage imgs : images) {
