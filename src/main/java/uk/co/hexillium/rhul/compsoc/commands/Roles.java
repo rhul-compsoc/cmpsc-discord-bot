@@ -21,6 +21,7 @@ import net.dv8tion.jda.api.interactions.components.Button;
 import net.dv8tion.jda.api.interactions.components.Component;
 import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
 import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
+import net.dv8tion.jda.api.utils.data.DataObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
@@ -346,8 +347,9 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                         if (asStr.length() < 2000){
                             event.reply(asStr).queue();
                         } else {
+                            DataObject data = DataObject.fromJson(asStr);
                             event.reply("The content is too large for a single message and has been attached")
-                                    .addFile(asStr.getBytes(StandardCharsets.UTF_8), "roles.json")
+                                    .addFile(data.toPrettyString().getBytes(StandardCharsets.UTF_8), "roles.json")
                                     .queue();
                         }
                     }
