@@ -30,6 +30,7 @@ import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionCategory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.RoleSelectionMenu;
 
 import javax.annotation.Nonnull;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -341,7 +342,14 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                     case "list": {
                         //args: ?STRING:catname
                         ObjectMapper mapper = new ObjectMapper();
-                        event.reply(asString(Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), true))).queue();
+                        String asStr = asString(Database.ROLE_MENU_STORAGE.getSelectionMenu(event.getGuild().getIdLong(), true));
+                        if (asStr.length() < 2000){
+                            event.reply(asStr).queue();
+                        } else {
+                            event.reply("The content is too large for a single message and has been attached")
+                                    .addFile(asStr.getBytes(StandardCharsets.UTF_8), "roles.json")
+                                    .queue();
+                        }
                     }
                     break;
                     case "addcategory": {
