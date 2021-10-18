@@ -14,7 +14,7 @@ public class TimeUtils {
                     "(" +
                     "mo|mnth|month|months" +
                     "|w|wk|wks|weeks" +
-                    "|h|hrs|hours" +
+                    "|h|hr|hrs|hours" +
                     "|d|day|days" +
                     "|m|min|mins|minutes" +
                     "|s|sec|secs|seconds" +
@@ -25,7 +25,7 @@ public class TimeUtils {
                     "(" +
                     "mo|mnth|month|months" +
                     "|w|wk|wks|weeks" +
-                    "|h|hrs|hours" +
+                    "|h|hr|hrs|hours" +
                     "|d|day|days" +
                     "|m|min|mins|minutes" +
                     "|s|sec|secs|seconds" +
@@ -113,7 +113,7 @@ public class TimeUtils {
                     //instant=instant.plus(Duration.ofMinutes(num));
                     offset = offset.plusMinutes(num);
                     break;
-                case "h": case "hrs": case "hours":
+                case "h": case "hr": case "hrs": case "hours":
                     //instant=instant.plus(Duration.ofHours(num));
                     offset = offset.plusHours(num);
                     break;
