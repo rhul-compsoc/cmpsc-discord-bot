@@ -14,7 +14,7 @@ public class TimeUtils {
                     "(" +
                     "mo|mnth|month|months" +
                     "|w|wk|wks|weeks" +
-                    "|h|hrs|hours" +
+                    "|h|hr|hrs|hours" +
                     "|d|day|days" +
                     "|m|min|mins|minutes" +
                     "|s|sec|secs|seconds" +
