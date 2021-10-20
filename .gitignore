@@ -69,8 +69,14 @@ gradle-app.setting
 .history
 .ionide
 
-### Intellij related files ###
+### Old .gitignore ###
+.gradle/**
 .idea/**
+build/**
+gradle/**
+gradlew.bat
+gradlew
+logs/**
 
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle
 
