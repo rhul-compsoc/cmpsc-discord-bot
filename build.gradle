@@ -38,6 +38,6 @@ dependencies {
     implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.114'
     implementation 'com.zaxxer:HikariCP:5.0.0'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.12.4'
-    implementation 'org.postgresql:postgresql:42.2.0'
+    implementation 'org.postgresql:postgresql:42.3.0'
 
 }

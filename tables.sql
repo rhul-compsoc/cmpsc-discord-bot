@@ -13,7 +13,7 @@ create table job_schedule
 
 create table student_verification
 (
-    student_pk                             integer
+    student_pk                             serial NOT NULL
         constraint student_id_pk
         primary key,
     student_id                             varchar(10)                                                    not null,
