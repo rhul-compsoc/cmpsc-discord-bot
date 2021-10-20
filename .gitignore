@@ -69,11 +69,12 @@ gradle-app.setting
 .history
 .ionide
 
+### Intellij related files ###
+.idea/**
+
 # End of https://www.toptal.com/developers/gitignore/api/java,gradle
 
 # User database + Discord stuff
-database.json
-keyfile.bin
-token.txt
-
-# 
+database.json # Used for storing database connection info
+keyfile.bin   # 
+token.txt     # Discord bot token
