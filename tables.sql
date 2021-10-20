@@ -13,7 +13,7 @@ create table job_schedule
 
 create table student_verification
 (
-    student_pk                             integer default nextval('student_id_student_pk_seq'::regclass) not null
+    student_pk                             integer
         constraint student_id_pk
         primary key,
     student_id                             varchar(10)                                                    not null,
