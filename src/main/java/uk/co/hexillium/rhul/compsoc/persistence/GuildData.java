@@ -87,7 +87,8 @@ public class GuildData {
                             }
 
                             GuildSettings settings = new GuildSettings(guildID,
-                                    null, 0, 0, 0, 0, 0, 0
+                                    null, 0, 0, 0,
+                                    0, 0, 0, 0
                                     //todo
                                     //,set.getString("prefix")
                             );

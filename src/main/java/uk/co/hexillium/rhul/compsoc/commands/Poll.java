@@ -11,6 +11,7 @@ import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
+import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.Button;
@@ -55,12 +56,6 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
         updateTimes = new HashMap<>();
     }
 
-    @Override
-    public void onLoad(JDA jda, CommandDispatcher manager) {
-        this.jda = jda;
-        getScheduler().registerHandle("poll_expiry", data -> {updateMessage(jda, data.getInt("poll_id"), true);});
-    }
-
     //range of progress = 0->100 incl.
     public static String generateProgressBar(double progress) {
         StringBuilder strbld = new StringBuilder();
@@ -72,6 +67,13 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
         return strbld.toString();
     }
 
+    @Override
+    public void onLoad(JDA jda, CommandDispatcher manager) {
+        this.jda = jda;
+        getScheduler().registerHandle("poll_expiry", data -> {
+            updateMessage(jda, data.getInt("poll_id"), true);
+        });
+    }
 
     public MessageEmbed generateEmbed(PollData data) {
         EmbedBuilder builder = new EmbedBuilder();
@@ -95,7 +97,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
 
     public ActionRow genActionRow(int id, boolean asDisabled) {
         Button button = Button.primary(handleIDs[0] + "|v:" + id, "Vote");
-        if (asDisabled){
+        if (asDisabled) {
             button = button.asDisabled();
         }
         return ActionRow.of(button);
@@ -129,7 +131,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
 
     }
 
-    private void updateMessage(JDA jda, int id, boolean expired){
+    private void updateMessage(JDA jda, int id, boolean expired) {
         PollData data = Database.POLL_STORAGE.fetchPollData(id, true);
         try {
             Guild guild = jda.getGuildById(data.getGuildId());
@@ -144,7 +146,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
             }
 
             MessageAction action = channel.editMessageEmbedsById(data.getMessageId(), generateEmbed(data));
-            if (expired || data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now())){
+            if (expired || data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now())) {
                 action.setActionRows(genActionRow(id, true)).queue(null, logger::error);
             } else {
                 action.queue(null, logger::error);
@@ -207,8 +209,18 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                                         .addOption(OptionType.STRING, "name", "The name or title of the poll", true)
                                         .addOption(OptionType.STRING, "description", "The description of this poll", true)
                                         .addOption(OptionType.INTEGER, "max", "The maximum number of selections a participant can make", true)
-                                        .addOption(OptionType.STRING, "time", "The time before this will expire (give a relative time, like `2h, 1m3s`)", true)
+                                        .addOption(OptionType.STRING, "time", "The time before this will expire (give a relative time, like \"2h, 1m3s\")", true)
                                         .addOption(OptionType.CHANNEL, "channel", "The target channel (currently unused)", true)
+                                        .addOptions(new OptionData(OptionType.INTEGER, "visibility", "The level of live information given about this poll.", true)
+                                                /*
+                                                  1<<0 stats
+                                                  1<<1 tallies
+                                                 */
+                                                .addChoice("Stats and tallies", 3)
+                                                .addChoice("Just stats", 1)
+                                                .addChoice("Just tallies", 2)
+                                                .addChoice("No information", 0)
+                                        )
                                         .addOption(OptionType.STRING, "opt-1", "The first option (the first two are mandatory)", true)
                                         .addOption(OptionType.STRING, "opt-2", "The second option (the first two are mandatory)", true)
                                         .addOption(OptionType.STRING, "opt-3", "Additional options (the rest are optional)", false)
@@ -240,7 +252,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     public void handleSlashCommand(SlashCommandEvent event) {
         switch (event.getName()) {
             case "poll":
-                if (event.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == 500612754185650177L)){
+                if (event.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == 500612754185650177L)) {
                     event.reply(">:(").setEphemeral(true).queue();
                     return;
                 }
@@ -276,7 +288,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                         max = Math.max(1, Math.min(25, max)); //bound it between 1 and 25;
                         String time = timeOpt.getAsString();
                         Matcher matcher = TimeUtils.timePattern.matcher(time);
-                        if (!matcher.matches()){
+                        if (!matcher.matches()) {
                             event.reply("Time does not appear to be a valid offset.  Some valid examples: `5m 8h`, `11s`, `13s, 55m`")
                                     .setEphemeral(true).queue();
                             return;

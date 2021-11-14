@@ -193,11 +193,13 @@ public class CommandDispatcher {
             return;
         }
         logger.info("Member " + event.getMember() + " executed " + handler.getClass().getName() + " slash command " + event.getCommandPath());
-        try {
-            handler.handleSlashCommand(event);
-        } catch (Exception ex){
-            logger.error("Failed to execute slash command ", ex);
-        }
+        Database.runLater(() -> {
+            try {
+                handler.handleSlashCommand(event);
+            } catch (Exception ex){
+                logger.error("Failed to execute slash command ", ex);
+            }
+        });
     }
 
     private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){
