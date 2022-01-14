@@ -221,8 +221,8 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             }
             Database.runLater(() -> {
                 recentMessageSpawnID = event.getMessageIdLong();
-//                Challenge question = genQuestion();
-                Challenge question = getBoolAlgebra();
+                Challenge question = genQuestion();
+//                Challenge question = getBoolAlgebra();
                 postChallenge(question, target);
             });
         }
@@ -278,23 +278,18 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             });
             return;
         }
-        if (event.getFullArg().isBlank() /*|| event.getArgs()[0].equalsIgnoreCase("help")*/ ) {
-            EmbedBuilder builder = new EmbedBuilder();
-            builder.setTitle("Trivia help");
-            builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
-                    "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
-                    "If you get a question wrong, you can use `!solve` for the bot to work it out, and show you how to solve it.\n\n" +
-                    "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
-                    "[You can see the Scoreboard here, too.](https://passport.cmpsc.uk/)");
-//            builder.addField("The Algebra Symbols:",
-//                    Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
-//                            + "\nNOT `¬`"
-//                    , false);
-            event.reply(builder.build());
-            return;
-        }
 
         if (event.getCommand().equalsIgnoreCase("solve")) {
+            if (event.getFullArg().equalsIgnoreCase("debug")){
+                event.reply(String.format("Type: %s,\n" +
+                                "Timeout: %d,\n" +
+                                "Question: %s",
+                        currentQuestion.getClass().getName(),
+                        currentQuestion.minimumSolveTimeSeconds(),
+                        currentQuestion.getQuestion()
+                ));
+                return;
+            }
             if (lastQuestion == null) {
                 event.reply("Cannot find inactive question to solve");
                 return;
@@ -329,71 +324,32 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                                 .queue();
                     }
                 });
-                return;
             }
+            return;
         }
 
-//        if (event.getAuthor().getIdLong() == 187979032904728576L) {
-//            if (event.getFullArg().equalsIgnoreCase("debug")) {
-//                event.reply(String.format("recentSentMessageID: %d\n" +
-//                        "recentMessageSpawnID: %d\n" +
-//                        "cooldown: %d\n" +
-//                        "minCooldown: %d\n" +
-//                        "cooldownMult: %d\n" +
-//                        "Lock State: %s\n", recentSentMessageID, recentMessageSpawnID, cooldown, minCooldown, cooldownMult, lock.toString()));
-//            } else if (event.getArgs().length == 4) {
-//                if (event.getArgs()[0].equalsIgnoreCase("gen")) {
-//                    String type = event.getArgs()[1];
-//                    int depth = Integer.parseInt(event.getArgs()[2]);
-//                    int hardness = Integer.parseInt(event.getArgs()[3]);
-//
-//                    BooleanAlgebra balg;
-//                    if (type.equalsIgnoreCase("bool")) {
-//                        balg = new BooleanAlgebra(depth, hardness, 0);
-//                    } else {
-//                        balg = new BooleanAlgebra(depth, hardness, 0, ThreadLocalRandom.current().nextBoolean());
-//                    }
-//                    LOGGER.info("Manually spawned a new boolean \"" + type + "\" problem with depth: " + depth + ", hardness:" + hardness + " operations: " + balg.getOperations() + "   and scores " + getScoreForBooleanAlgebra(balg));
-//                    Database.runLater(() -> { //don't run on WS thread
-//                        if (balg.getOperations() > 2000) {
-//                            event.reply("This is far too long to generate :( op:" + balg.getOperations());
-//                            return;
-//                        }
-//                        String quest = balg.toString();
-//                        if (quest.length() > 2048) {
-//                            quest = balg.toCompactString();
-//                        }
-//                        int score = getScoreForBooleanAlgebra(balg);
-//                        if (quest.length() < 2048) {
-//                            event.reply("Generating problem... (may take a while to create the image)\n"
-//                                    + "Op count: " + balg.getOperations() + ", scores: " + score);
-//                        } else {
-//                            event.reply("Generated message was too long.");
-//                            return;
-//                        }
-//                        try {
-//                            balg.findSolution();
-//                            balg.markSolution();
-//                            Question newQ = new Question(quest, balg.getValue(), 0, balg.genImage(true), balg);
-//                            //Question newQ = new Question(quest, balg.getValue(), score, balg.genImage(false));
-//                            recentMessageSpawnID = event.getMessageIdLong();
-//                            askAlgebra(newQ, event.getTextChannel());
-//                        } catch (Exception ex) {
-//                            LOGGER.error("Failed to generate problem ", ex);
-//                        }
-////
-//                    });
-//                    return;
-//
-//                }
-//            }
-//        }
+        if (event.getFullArg().isBlank() /*|| event.getArgs()[0].equalsIgnoreCase("help")*/ ) {
+            EmbedBuilder builder = new EmbedBuilder();
+            builder.setTitle("Trivia help");
+            builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
+                    "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
+                    "If you get a question wrong, you can use `!solve` for the bot to work it out, and show you how to solve it.\n\n" +
+                    "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
+                    "[You can see the Scoreboard here, too.](https://passport.cmpsc.uk/)");
+//            builder.addField("The Algebra Symbols:",
+//                    Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
+//                            + "\nNOT `¬`"
+//                    , false);
+            event.reply(builder.build());
+            return;
+        }
+
         if (currentQuestion == null) {
             event.reply("There is no active question.");
         }
 
         String answer = event.getFullArg().toUpperCase(Locale.ROOT); // case isn't important here.
-        if (currentQuestion.isValidAnswer(answer)) {
+        if (!currentQuestion.isValidAnswer(answer)) {
             event.reply("That was not a valid answer.");
             return;
         }

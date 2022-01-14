@@ -1,5 +1,7 @@
 package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.BasicStroke;
@@ -19,13 +21,15 @@ public class DijkstraChallenge extends GraphChallenge{
     private int score;
     private int totalOperations;
 
+    private static final Logger logger = LogManager.getLogger(DijkstraChallenge.class);
+
     public DijkstraChallenge(int points) {
         super(points);
         int max = this.graph.nodes.size();
         from = this.graph.nodes.get(ThreadLocalRandom.current().nextInt(max));
         to = from;
 
-        int tries = this.graph.nodes.size() * 2;
+        int tries = this.graph.nodes.size() * 100;
         //have an attempt to maximise the number of hops between them
         int maxScore = hopsBetween(from, to);
         for (int i = 0; i < tries; i++){
@@ -50,35 +54,26 @@ public class DijkstraChallenge extends GraphChallenge{
     }
 
     private int hopsBetween(Node from, Node to){
-        ArrayDeque<Node> queue = new ArrayDeque<>();
-        ArrayDeque<Integer> scores = new ArrayDeque<>();
         HashSet<Node> visited = new HashSet<>();
-        queue.add(from);
+        HashSet<Node> newVisited = new HashSet<>();
         visited.add(from);
-        int score = 0;
-        while (!queue.isEmpty()){
-            Node current = queue.poll();
-            if (current.equals(to)){
-                return score;
-            }
-            int entries = 0;
-            for (Node child : current.neighbours.keySet()){
-                if (!visited.contains(child)){
-                    entries++;
-                    queue.add(child);
+        int level = 0;
+        while (visited.size() < this.graph.nodes.size()){
+            newVisited.clear();
+            for (Node n : visited){
+                for (Node neighbour : n.neighbours.keySet()){
+                    if (!visited.contains(neighbour)){
+                        newVisited.add(neighbour);
+                    }
                 }
             }
-            scores.add(entries);
-
-            int currentScore = scores.poll();
-            if (currentScore == 0){
-                score++;
-                scores.poll();
-            } else {
-                scores.addFirst(currentScore-1);
+            visited.addAll(newVisited);
+            level++;
+            if (visited.contains(to)){
+                return level;
             }
         }
-        return score;
+        return level;
     }
 
     @Override
@@ -107,20 +102,12 @@ public class DijkstraChallenge extends GraphChallenge{
 
     @Override
     public boolean isCorrectAnswer(String answer) {
-        List<String> labels = Arrays.stream(answer.toUpperCase(Locale.ROOT).split("")).collect(Collectors.toList());
-        if (labels.size() > this.graph.nodes.size()              //too many nodes - each node should only be explored once
-                || labels.size() < this.graph.nodes.size() - 1 ){    //too few nodes - each node must be explored once (I will permit omission of the starting node)
-            return false;
-        }
-        if (!labels.get(0).equals(from.getLabel())){
-            labels.add(0, from.getLabel());
-        }
-        return this.solution.nodes.stream().map(n -> n.label).collect(Collectors.toList()).equals(labels);
+        return answer.equalsIgnoreCase(this.solution.getRepr()) || (this.from.label + answer).equalsIgnoreCase(this.solution.getRepr());
     }
 
     @Override
     public String getSolution() {
-        return this.solution.nodes.stream().map(n -> n.label).collect(Collectors.joining(""));
+        return this.solution.getRepr();
     }
 
     @Override
@@ -169,25 +156,34 @@ public class DijkstraChallenge extends GraphChallenge{
     }
 
     public Path findPath(Node source, Node destination){
-        PriorityQueue<Path> paths = new PriorityQueue<>();
+        //Paths are sorted on their length, so the first path is the shortest
+        PriorityQueue<Path> paths = new PriorityQueue<>(Comparator.comparing(Path::getCost));
         HashSet<Node> explored = new HashSet<>();
-        int totalOperations = 0;
+        HashMap<Node, Integer> distances = new HashMap<>();
+        totalOperations = 0;
+        explored.add(source);
         paths.add(new Path(Collections.singletonList(source), 0));
         while (!paths.isEmpty()){
             Path path = paths.poll();
+            //if the path meets the destination, return it
             if (path.getHead().equals(destination)){
                 return path;
             }
+            //index all neighbors of the head of the path
             for (Node child : path.getHead().getNeighbours().keySet()){
-                if (explored.contains(child)){
-                    continue;
-                }
+                int newCost = path.getCost() + path.getHead().getNeighbours().get(child);
                 totalOperations++;
+                if (distances.containsKey(child)){
+                    if (newCost >= distances.get(child)){
+                        continue;
+                    }
+                }
+                distances.put(child, newCost);
                 explored.add(child);
                 paths.add(path.addNode(child, path.getHead().getNeighbours().get(child)));
+
             }
         }
-        this.totalOperations = totalOperations;
         return null;
     }
 
@@ -212,13 +208,31 @@ public class DijkstraChallenge extends GraphChallenge{
             return new Path(newNodes, this.cost + extraCost);
         }
 
+        public String getRepr(){
+            return repr;
+        }
+
         public Node getHead(){
             return nodes.get(nodes.size() - 1);
+        }
+
+        public int getCost() {
+            return cost;
         }
 
         @Override
         public int compareTo(@NotNull DijkstraChallenge.Path o) {
             return this.cost - o.cost;
+        }
+
+        @Override
+        public String toString() {
+            return this.repr + "~@" + this.cost + nodes.stream().map(Node::getLabel).collect(Collectors.joining(""));
+        }
+
+        @Override
+        public int hashCode() {
+            return nodes.hashCode();
         }
     }
 }

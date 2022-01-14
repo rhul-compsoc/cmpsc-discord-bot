@@ -94,26 +94,38 @@ class PrimsSolution {
     int operationCount = 0;
 
     PrimsSolution (PrimsDelaunayGraph graph){
+        solve(graph);
+    }
+
+    private void solve(PrimsDelaunayGraph graph){
         pairwiseNodes = new ArrayList<>();
+
         HashSet<Node> visited = new HashSet<>();
         visited.add(graph.nodes.get(0));
-        while (visited.size() < graph.nodes.size()) {
-            Node from = null, to = null;
-            int score = Integer.MAX_VALUE;
-            for (Node node : graph.nodes) {
-                for (Map.Entry<Node, Integer> other : node.getNeighbours().entrySet()) {
-                    if (visited.contains(other.getKey())) continue;
-                    operationCount++;
-                    if (other.getValue() < score) {
+
+        while (visited.size() < graph.nodes.size()){
+            //get the smallest edge from a visited node to an unvisited node
+            Node from = null;
+            Node smallest = null;
+            int smallestWeight = Integer.MAX_VALUE;
+            for (Node node : visited){
+                for (Node neighbour : node.neighbours.keySet()){
+                    if (visited.contains(neighbour)){
+                        continue;
+                    }
+                    int weight = node.neighbours.get(neighbour);
+                    if (weight < smallestWeight){
                         from = node;
-                        to = other.getKey();
+                        smallest = neighbour;
+                        smallestWeight = weight;
                     }
                 }
             }
+            //add the smallest edge to the solution
             pairwiseNodes.add(from);
-            pairwiseNodes.add(to);
-            this.score += score;
-            visited.add(to);
+            pairwiseNodes.add(smallest);
+            visited.add(smallest);
+            score += smallestWeight;
         }
     }
 

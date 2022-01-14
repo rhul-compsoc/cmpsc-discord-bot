@@ -1,9 +1,5 @@
 package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
-import net.dv8tion.jda.api.entities.VoiceChannel;
-import sun.misc.Unsafe;
-
-import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -31,7 +27,7 @@ public class DFSChallenge extends GraphChallenge{
 
     @Override
     public String getQuestion() {
-        return "Using a depth-first-search starting from node " + from.label + ", in which order would the nodes of this tree be explored?\n\n" +
+        return "Using a depth-first-search starting from node " + from.label + ", in which order would the nodes of this graph be explored?\n\n" +
                 "Please give your answer as each of the nodes' letters in the correct order.  A node's children should be explored alphabetically.\n" +
                 "Example: `!t ABCDEFG`";
     }
@@ -91,19 +87,28 @@ class DFSSolution {
     List<String> solution = new ArrayList<>();
 
     DFSSolution(DelaunayGraph graph, Node node){
-        ArrayDeque<Node> stack = new ArrayDeque<>();
+        solve(graph, node);
+    }
+
+    private void solve(DelaunayGraph graph, Node node){
+        Stack<Node> stack = new Stack<>();
         HashSet<Node> visited = new HashSet<>();
         stack.push(node);
         while (!stack.isEmpty()){
             Node current = stack.pop();
-            visited.add(current);
+            if (visited.contains(current)){
+                continue;
+            }
             solution.add(current.getLabel());
-            current.getNeighbours().keySet().stream().filter(child -> !visited.contains(child))
-                    .sorted((o1, o2) -> o2.label.compareTo(o1.label))
+            visited.add(current);
+            current.getNeighbours()
+                    .keySet()
+                    .stream()
+                    .sorted(Comparator.comparing(Node::getLabel))
+                    .filter(n -> !visited.contains(n))
                     .forEach(stack::push);
         }
     }
-
 }
 
 

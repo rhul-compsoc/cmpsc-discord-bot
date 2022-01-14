@@ -109,11 +109,10 @@ public class PollStorage {
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(UPDATE_POLL_MESSAGE_LOCATION)){
 
-            statement.setInt(4, pollId);
-
             statement.setLong(1, channelId);
             statement.setLong(2, guildId);
             statement.setLong(3, messageId);
+            statement.setInt(4, pollId);
 
             statement.executeUpdate();
 
