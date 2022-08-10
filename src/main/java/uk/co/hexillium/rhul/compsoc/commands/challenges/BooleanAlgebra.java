@@ -474,9 +474,6 @@ enum BooleanOP {
     AND("∧", (a, b) -> a & b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
-
-//            g2.setColor(Color.BLACK);
             //vertical line for the and
             g2.drawLine(startX, startY, startX, startY + heightY - 1);
             //extensions
@@ -486,19 +483,11 @@ enum BooleanOP {
             g2.drawArc((startX - (2 * widthX / 3)), startY, (2 * widthX) - (widthX / 3), heightY - 1, 270, 180);
 
             g2.setStroke(new BasicStroke(1));
-
-
-//            int centrex = (int) (startX + (0.5 * widthX));
-//            int centrey = (int) (startY + (0.5 * heightY));
-//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
-//            g2.drawString("AND", centrex, centrey);
         }
     },
     OR("∨", (a, b) -> a | b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
-
             QuadCurve2D curve = new QuadCurve2D.Double(startX, startY, startX + (2 * widthX / 3d), startY + (heightY / 10d), startX + widthX - 1, startY + heightY / 2d);
             g2.draw(curve);
             curve = new QuadCurve2D.Double(startX, startY + heightY, startX + (2 * widthX / 3d), (startY + heightY) - (heightY / 10d), startX + widthX - 1, (startY + heightY) - heightY / 2d);
@@ -507,18 +496,11 @@ enum BooleanOP {
             g2.draw(curve);
             g2.setStroke(new BasicStroke(1));
 
-
-//            int centrex = (int) (startX + (0.5 * widthX));
-//            int centrey = (int) (startY + (0.5 * heightY));
-//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
-//            g2.drawString("OR", centrex, centrey);
         }
     },
     XOR("⊕", (a, b) -> a ^ b) {
         @Override
         void drawOp(Graphics2D g2, int startX, int widthX, int startY, int heightY) {
-//            g2.setStroke(new BasicStroke(widthX < 100 ? 1 : widthX / 100f));
-
             QuadCurve2D curve = new QuadCurve2D.Double(startX + (widthX / 10d), startY, startX + 5 + (2 * widthX / 3d), startY + (heightY / 10d), startX + widthX - 1, startY + heightY / 2d);
             g2.draw(curve);
             curve = new QuadCurve2D.Double(startX + (widthX / 10d), startY + heightY, startX + (2 * widthX / 3d), (startY + heightY) - (heightY / 10d), startX + widthX - 1, (startY + heightY) - heightY / 2d);
@@ -530,11 +512,6 @@ enum BooleanOP {
             curve = new QuadCurve2D.Double(startX, startY, startX + widthX / 2.5d, startY + (heightY / 2d), startX, (startY + heightY));
             g2.draw(curve);
             g2.setStroke(new BasicStroke(1));
-//
-//            int centrex = (int) (startX + (0.5 * widthX));
-//            int centrey = (int) (startY + (0.5 * heightY));
-//            g2.setFont(g2.getFont().deriveFont(widthX / 10f));
-//            g2.drawString("XOR", centrex, centrey);
         }
     },
 //    IMPLIES("->", (a, b) -> !a | b)

@@ -17,7 +17,7 @@ public class DijkstraChallenge extends GraphChallenge{
     private Node from;
     private Node to;
     private Set<String> nodeLabels;
-    private Path solution;
+    private Path[] solutions;
     private int score;
     private int totalOperations;
 
@@ -47,10 +47,10 @@ public class DijkstraChallenge extends GraphChallenge{
         while (to == from)
             to = this.graph.nodes.get(ThreadLocalRandom.current().nextInt(max));
         nodeLabels = this.graph.nodes.stream().map(Node::getLabel).collect(Collectors.toSet());
-        this.solution = findPath(from, to);
+        this.solutions = findPath(from, to);
 
         // some function of the total nodes, the total number of steps in the path and a random variable to make this process less reversible
-        this.score = (int) (Math.sqrt(this.graph.nodes.size()) * 0.6    +    this.solution.nodes.size()    +    ThreadLocalRandom.current().nextInt(3));
+        this.score = (int) (Math.sqrt(this.graph.nodes.size()) * 0.6    +    this.solutions[0].nodes.size()    +    ThreadLocalRandom.current().nextInt(3));
     }
 
     private int hopsBetween(Node from, Node to){
@@ -71,6 +71,9 @@ public class DijkstraChallenge extends GraphChallenge{
             level++;
             if (visited.contains(to)){
                 return level;
+            }
+            if (newVisited.isEmpty()){
+                throw new IllegalStateException("Failed to explore graph.");
             }
         }
         return level;
@@ -102,16 +105,21 @@ public class DijkstraChallenge extends GraphChallenge{
 
     @Override
     public boolean isCorrectAnswer(String answer) {
-        return answer.equalsIgnoreCase(this.solution.getRepr()) || (this.from.label + answer).equalsIgnoreCase(this.solution.getRepr());
+        return Arrays.stream(this.solutions)
+                .anyMatch(solution ->
+                                          answer .equalsIgnoreCase(solution.getRepr()) ||
+                       (this.from.label + answer).equalsIgnoreCase(solution.getRepr())
+                );
     }
 
     @Override
     public String getSolution() {
-        return this.solution.getRepr();
+        return this.solutions[0].getRepr();
     }
 
     @Override
     public BufferedImage generateSolutionImage() {
+        Path solution = this.solutions[0];
         BufferedImage image = new BufferedImage(1000, 1000, BufferedImage.TYPE_4BYTE_ABGR);
 
         Graphics2D g2 = (Graphics2D) image.getGraphics();
@@ -127,9 +135,9 @@ public class DijkstraChallenge extends GraphChallenge{
         this.graph.drawConnections(this.graph.nodes, g2, true);
 
         g2.setColor(Color.RED);
-        Node prev = this.solution.nodes.get(0);
-        for (int i = 1; i < this.solution.nodes.size(); i++){
-            Node next = this.solution.nodes.get(i);
+        Node prev = solution.nodes.get(0);
+        for (int i = 1; i < solution.nodes.size(); i++){
+            Node next = solution.nodes.get(i);
             this.graph.drawLine(prev.x, prev.y, next.x, next.y, g2);
             prev = next;
         }
@@ -155,7 +163,7 @@ public class DijkstraChallenge extends GraphChallenge{
         return totalOperations;
     }
 
-    public Path findPath(Node source, Node destination){
+    public Path[] findPath(Node source, Node destination){
         //Paths are sorted on their length, so the first path is the shortest
         PriorityQueue<Path> paths = new PriorityQueue<>(Comparator.comparing(Path::getCost));
         HashSet<Node> explored = new HashSet<>();
@@ -163,11 +171,23 @@ public class DijkstraChallenge extends GraphChallenge{
         totalOperations = 0;
         explored.add(source);
         paths.add(new Path(Collections.singletonList(source), 0));
+
+        int minimumCost = Integer.MAX_VALUE;
+        ArrayList<Path> validPaths = new ArrayList<>();
+
         while (!paths.isEmpty()){
             Path path = paths.poll();
+
+            //if the path is longer than the shortest path, we can stop
+            if (path.getCost() > minimumCost){
+                break;
+            }
+
             //if the path meets the destination, return it
             if (path.getHead().equals(destination)){
-                return path;
+                minimumCost = path.getCost();
+                validPaths.add(path);
+                continue;
             }
             //index all neighbors of the head of the path
             for (Node child : path.getHead().getNeighbours().keySet()){
@@ -184,7 +204,7 @@ public class DijkstraChallenge extends GraphChallenge{
 
             }
         }
-        return null;
+        return validPaths.toArray(new Path[0]);
     }
 
     static class Path implements Comparable<Path>{

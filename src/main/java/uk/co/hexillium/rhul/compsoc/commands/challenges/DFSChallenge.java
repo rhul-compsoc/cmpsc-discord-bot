@@ -64,7 +64,7 @@ public class DFSChallenge extends GraphChallenge{
 
     @Override
     public String getSolution() {
-        return this.from.label + String.join("", this.solution.solution);
+        return String.join("", this.solution.solution);
     }
 
     @Override
@@ -104,7 +104,7 @@ class DFSSolution {
             current.getNeighbours()
                     .keySet()
                     .stream()
-                    .sorted(Comparator.comparing(Node::getLabel))
+                    .sorted(Comparator.comparing(Node::getLabel).reversed())
                     .filter(n -> !visited.contains(n))
                     .forEach(stack::push);
         }

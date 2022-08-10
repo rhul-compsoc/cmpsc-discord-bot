@@ -23,8 +23,8 @@ public class MinimumSpanningTreeChallenge extends GraphChallenge {
 
     @Override
     public int getPoints(boolean correct) {
-        int max = (int) Math.ceil(this.graph.nodes.size() / 8f);
-        return correct ? max : -max;
+        int max = (int) Math.ceil(this.graph.nodes.size() / 3f);
+        return correct ? max : -max/2;
     }
 
     @Override

@@ -27,8 +27,8 @@ public abstract class GraphChallenge extends Challenge {
  create a [-]     - Ford-Fulkerson => what is the maximum flow of the given symmetrical network
  digraph  [-]
  for this [-]
-          [ ]  - Minimum Spanning Tree
-          [ ]     - Total Cost => what is the sum of all weights of this graph's minimum spanning tree? (Prim's)
+          [x]  - Minimum Spanning Tree
+          [x]     - Total Cost => what is the sum of all weights of this graph's minimum spanning tree? (Prim's)
 
 
      */
@@ -39,7 +39,7 @@ public abstract class GraphChallenge extends Challenge {
 
     static {
         //S and T omitted for their usefulness as source and drain labels
-        letters = Stream.of(("ABCDEFGHIJKLMNOPQR" + /* "ST" */ "UVWXYZ").split("")).collect(Collectors.toList());
+        letters = Stream.of(("ABCDEFGH" + /* IJ + */ "K" + /* L + */ "MNOPQR" + /* "ST" */ "UVWXYZ").split("")).collect(Collectors.toList());
     }
 
     public GraphChallenge(int points){
@@ -54,8 +54,12 @@ public abstract class GraphChallenge extends Challenge {
     static synchronized Collection<Node> generateNodeDistribution(int points){
         Random random = ThreadLocalRandom.current();
         Collection<Node> nodes = new ArrayList<>();
-        for (int i = 0; i < points; i++) {
-            nodes.add(new Node(random.nextDouble() * 90 + 5, random.nextDouble() * 90 + 5, letters.get(i)));
+        int max_attempts = 100 + 20 * points;
+        while (nodes.size() < points && max_attempts-- > 0){
+            Node newnode = new Node(random.nextDouble() * 90 + 5, random.nextDouble() * 90 + 5, letters.get(nodes.size()));
+            if (nodes.stream().anyMatch(node -> node.sqDistTo(newnode) < 175)) continue;
+
+            nodes.add(newnode);
         }
         return nodes;
     }
@@ -287,6 +291,10 @@ class Node {
 
     String getLabel() {
         return label;
+    }
+
+    double sqDistTo(Node other){
+        return (x - other.x) * (x - other.x) + (y - other.y) * (y - other.y);
     }
 
 
