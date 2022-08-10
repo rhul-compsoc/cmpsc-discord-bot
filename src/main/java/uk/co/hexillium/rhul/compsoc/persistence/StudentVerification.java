@@ -48,6 +48,8 @@ public class StudentVerification {
                     "       student_details_submitted, student_details_invalidated, student_discord_snowflake, " +
                     "       student_details_invalidated_time " +
                     "from student_verification where student_verification_message_snowflake = ?;";
+    private final static String IS_DISCORD_ACCOUNT_VALIDATED =
+            "select student_verified from student_verification where student_discord_snowflake = ? order by student_pk desc limit 1;";
 
     private HikariDataSource source;
 
@@ -186,6 +188,25 @@ public class StudentVerification {
         } catch (SQLException ex){
             LOGGER.error("Failed to validate student", ex);
         }
+    }
+
+    public boolean isDiscordAccountValidated(long discordId){
+        try (Connection connection = source.getConnection();
+             PreparedStatement statement = connection.prepareStatement(IS_DISCORD_ACCOUNT_VALIDATED)){
+
+            statement.setLong(1, discordId);
+
+            try (ResultSet rs = statement.executeQuery()){
+                if (rs == null) return false;
+                if (rs.next()){
+                    return rs.getBoolean("student_verified");
+                }
+                return false;
+            }
+        } catch (SQLException ex){
+            LOGGER.error("Failed to fetch student validation state", ex);
+        }
+        return false;
     }
 
     public VerificationMessage updateVerificationMessage(long messageID){

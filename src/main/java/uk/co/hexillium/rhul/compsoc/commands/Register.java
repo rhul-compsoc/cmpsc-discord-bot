@@ -4,8 +4,10 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.events.GenericEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
 import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
+import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -30,6 +32,12 @@ public class Register extends Command implements EventListener {
 //    private static final long CHANNEL_ID = 751541795585785976L;
 //    private static final long VERIFIED_ROLE_ID = 768265402593574953L;
 
+
+    //todo add student and membership roles to people who left and rejoin
+    //todo ping tapir for data on membership for completed verifications
+
+    //todo https://compsocbot:password123@tapir.compsoc.dev/admin/compsocbot/
+    //
 
     public Register() {
         super("Register", "Register your university identity", "`{{cmd_prefix}}testCommand`, idk really what it does."
@@ -244,6 +252,21 @@ public class Register extends Command implements EventListener {
 
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
+        if (genericEvent instanceof GuildMemberJoinEvent){
+            GuildMemberJoinEvent event = (GuildMemberJoinEvent) genericEvent;
+            if (event.getMember().getUser().isBot()){
+                return;
+            }
+            Database.runLater(() -> {
+                boolean verified = Database.STUDENT_VERIFICATION.isDiscordAccountValidated(event.getMember().getUser().getIdLong());
+                if (verified){
+                    event.getGuild().addRoleToMember(event.getMember(), event.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
+                    event.getGuild().addRoleToMember(event.getMember(), event.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
+                    logger.info("Previously verified user joined server, adding roles");
+                }
+            });
+            return;
+        }
         if (!(genericEvent instanceof GuildMessageReactionAddEvent)){
             if (genericEvent instanceof PrivateMessageReceivedEvent){
                 PrivateMessageReceivedEvent event = (PrivateMessageReceivedEvent) genericEvent;
@@ -304,4 +327,11 @@ public class Register extends Command implements EventListener {
             });
         }
     }
+
+    /*
+
+
+
+
+     */
 }
