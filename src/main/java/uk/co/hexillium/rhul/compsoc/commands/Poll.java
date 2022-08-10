@@ -3,6 +3,7 @@ package uk.co.hexillium.rhul.compsoc.commands;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
@@ -75,7 +76,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
         });
     }
 
-    public MessageEmbed generateEmbed(PollData data) {
+    public MessageEmbed generateEmbed(PollData data, boolean expired) {
         EmbedBuilder builder = new EmbedBuilder();
         builder.setTitle(data.getName());
 
@@ -83,12 +84,22 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
         for (int i = 0; i < data.getOptions().length; i++) {
             desc.append(i).append(") ").append(data.getOption(i)).append("\n");
         }
-        desc.append("```\n").append(data.getVotesAsGraph()).append("```");
+
+        //add the tallies if it has ended or if the flags are set
+        if (expired || (data.getVisibilityFlags() & PollData.VISIBILITY_FLAG_TALLIES) == PollData.VISIBILITY_FLAG_TALLIES) {
+            desc.append("```\n").append(data.getVotesAsGraph()).append("```");
+        }
 
         builder.setDescription(desc.toString());
+        for(var x : data.getOptions()) {
+            jda.getRestPing().queue(a -> System.out.println(x)); //error
+        }
         builder.addField("Description", data.getDescription(), false);
         builder.addField("Limits", "You may select up to " + data.getMax_options() + " options.", false);
-        builder.addField("Stats", data.getStatsAsString(), false);
+        //add the stats field if it has expired, or if the flags are set
+        if (expired || (data.getVisibilityFlags() & PollData.VISIBILITY_FLAG_STATS) == PollData.VISIBILITY_FLAG_STATS) {
+            builder.addField("Stats", data.getStatsAsString(), false);
+        }
         builder.addField("Started", TimeFormat.DATE_TIME_LONG.format(data.getStarted()), true);
         builder.addField("Expires", TimeFormat.DATE_TIME_LONG.format(data.getExpires()), true);
 
@@ -96,7 +107,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     }
 
     public ActionRow genActionRow(int id, boolean asDisabled) {
-        Button button = Button.primary(handleIDs[0] + "|v:" + id, "Vote");
+        Button button = Button.primary(handleIDs[0] + "|v:" + id, asDisabled ? "Voting Closed" : "Vote");
         if (asDisabled) {
             button = button.asDisabled();
         }
@@ -144,9 +155,9 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                 logger.error("Cannot find channel");
                 return;
             }
-
-            MessageAction action = channel.editMessageEmbedsById(data.getMessageId(), generateEmbed(data));
-            if (expired || data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now())) {
+            expired = expired || data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now());
+            MessageAction action = channel.editMessageEmbedsById(data.getMessageId(), generateEmbed(data, expired));
+            if (expired) {
                 action.setActionRows(genActionRow(id, true)).queue(null, logger::error);
             } else {
                 action.queue(null, logger::error);
@@ -188,10 +199,17 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
         }
         int finalSet = set;
         Database.runLater(() -> {
+            PollData data = Database.POLL_STORAGE.fetchPollData(id, false);
+            boolean expired = data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now());
+            if (expired) {
+                interaction.getHook().editOriginal("This poll has expired.").queue();
+                return;
+            }
             Database.POLL_STORAGE.upsertPollSelectionForMember(id, interaction.getUser().getIdLong(), finalSet);
             updateMessage(interaction.getJDA(), id);
+            interaction.getHook().editOriginal("Thanks for voting!  Your selection has been updated successfully.").queue();
         });
-        interaction.editMessage("Thanks for voting!").setActionRows().queue();
+        interaction.editMessage("Submitting vote...").setActionRows().queue();
     }
 
     @Override
@@ -206,37 +224,38 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                 new CommandData("poll", "Manage and create polls via this command")
                         .addSubcommands(
                                 new SubcommandData("create", "Create your own poll.")
-                                        .addOption(OptionType.STRING, "name", "The name or title of the poll", true)
+                                        .addOption(OptionType.STRING, "name",        "The name or title of the poll", true)
                                         .addOption(OptionType.STRING, "description", "The description of this poll", true)
-                                        .addOption(OptionType.INTEGER, "max", "The maximum number of selections a participant can make", true)
-                                        .addOption(OptionType.STRING, "time", "The time before this will expire (give a relative time, like \"2h, 1m3s\")", true)
-                                        .addOption(OptionType.CHANNEL, "channel", "The target channel (currently unused)", true)
-                                        .addOptions(new OptionData(OptionType.INTEGER, "visibility", "The level of live information given about this poll.", true)
-                                                /*
-                                                  1<<0 stats
-                                                  1<<1 tallies
-                                                 */
+                                        .addOption(OptionType.INTEGER, "max",        "The maximum number of selections a participant can make", true)
+                                        .addOption(OptionType.STRING, "time",        "The time before this will expire (give a relative time, like \"2h, 1m3s\")", true)
+                                        .addOption(OptionType.CHANNEL, "channel",    "The target channel (currently unused)", true)
+                                        .addOptions(
+                                                new OptionData(OptionType.INTEGER, "visibility", "The level of live information given about this poll.", true)
+                                                            /* visibility:
+                                                              1<<0 stats
+                                                              1<<1 tallies
+                                                             */
                                                 .addChoice("Stats and tallies", 3)
                                                 .addChoice("Just stats", 1)
                                                 .addChoice("Just tallies", 2)
                                                 .addChoice("No information", 0)
                                         )
-                                        .addOption(OptionType.STRING, "opt-1", "The first option (the first two are mandatory)", true)
-                                        .addOption(OptionType.STRING, "opt-2", "The second option (the first two are mandatory)", true)
-                                        .addOption(OptionType.STRING, "opt-3", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-4", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-5", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-6", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-7", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-8", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-9", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-10", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-11", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-12", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-13", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-14", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-15", "Additional options (the rest are optional)", false)
-                                        .addOption(OptionType.STRING, "opt-16", "Additional options (the rest are optional)", false)
+                                        .addOption(OptionType.STRING, "opt-1",  "The first option (the first two are mandatory)",  true)
+                                        .addOption(OptionType.STRING, "opt-2",  "The second option (the first two are mandatory)", true)
+                                        .addOption(OptionType.STRING, "opt-3",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-4",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-5",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-6",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-7",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-8",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-9",  "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-10", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-11", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-12", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-13", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-14", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-15", "Additional options (the rest are optional)",      false)
+                                        .addOption(OptionType.STRING, "opt-16", "Additional options (the rest are optional)",      false)
 //                                        .addOption(OptionType.STRING, "opt-17", "Additional options (the rest are optional)", false)
 //                                        .addOption(OptionType.STRING, "opt-18", "Additional options (the rest are optional)", false)
 //                                        .addOption(OptionType.STRING, "opt-19", "Additional options (the rest are optional)", false)
@@ -268,9 +287,10 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                         OptionMapping nameOpt = event.getOption("name");
                         OptionMapping timeOpt = event.getOption("time");
                         OptionMapping descOpt = event.getOption("description");
+                        OptionMapping visibilityOpt = event.getOption("visibility");
 
-                        if (maxOpt == null || nameOpt == null || timeOpt == null || descOpt == null) {
-                            event.reply("Somehow you've set an optional argument to null. Go and think about what you've done.").setEphemeral(true).queue();
+                        if (maxOpt == null || nameOpt == null || timeOpt == null || descOpt == null || visibilityOpt == null) {
+                            event.reply("Somehow you've set a non-optional argument to null. Go and think about what you've done.").setEphemeral(true).queue();
                             return;
                         }
 
@@ -296,7 +316,6 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                         OffsetDateTime expires = TimeUtils.parseTarget(time);
                         List<String> options = event.getOptions().stream()
                                 .filter(opt -> opt.getName().startsWith("opt-"))
-//                                .sorted(Comparator.comparing(optionMapping -> Integer.parseInt(optionMapping.getName().split("-")[1]))) //the options may already be sorted
                                 .map(OptionMapping::getAsString)
                                 .collect(Collectors.toList());
                         if (options.stream().anyMatch(opt -> opt.length() > 100)) {
@@ -309,12 +328,12 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
 //                            OffsetDateTime expires = OffsetDateTime.now().plus(2, ChronoUnit.DAYS);
                             int pollId = Database.POLL_STORAGE.insertNewPollData(options.toArray(new String[0]),
                                     OffsetDateTime.now(), false, expires,
-                                    (int) finalMax, name, description);
+                                    (int) finalMax, name, description, (int) visibilityOpt.getAsLong());
                             PollData data = Database.POLL_STORAGE.fetchPollData(pollId, true);
                             DataObject dobj = DataObject.empty();
                             dobj.put("poll_id", pollId);
                             getScheduler().submitJob(new Job(-1, System.currentTimeMillis(), Instant.from(expires).toEpochMilli(), "poll_expiry", dobj));
-                            event.getTextChannel().sendMessageEmbeds(generateEmbed(data))
+                            event.getTextChannel().sendMessageEmbeds(generateEmbed(data, false))
                                     .setActionRows(genActionRow(pollId))
                                     .queue(msg ->
                                             Database.runLater(
