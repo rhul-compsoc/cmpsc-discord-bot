@@ -10,12 +10,16 @@ import java.util.List;
 
 public class PollData {
 
+    public static int VISIBILITY_FLAG_STATS = 1<<0;
+    public static int VISIBILITY_FLAG_TALLIES = 1<<1;
+
     int id;
     String[] options;
     OffsetDateTime started;
     boolean finished;
     OffsetDateTime expires;
     int max_options;
+    int visibilityFlags;
 
     String name;
     String description;
@@ -29,7 +33,7 @@ public class PollData {
 
     public PollData(int id, String[] options, OffsetDateTime started, boolean finished, OffsetDateTime expires,
                     int max_options, PollSelection[] selections, String name, String description,
-                    long channelId, long guildId, long messageId) {
+                    long channelId, long guildId, long messageId, int visibilityFlags) {
         this.id = id;
         this.options = options;
         this.started = started;
@@ -42,6 +46,7 @@ public class PollData {
         this.channelId = channelId;
         this.guildId = guildId;
         this.messageId = messageId;
+        this.visibilityFlags = visibilityFlags;
     }
 
     public int getId() {
@@ -94,6 +99,10 @@ public class PollData {
 
     public long getMessageId() {
         return messageId;
+    }
+
+    public int getVisibilityFlags() {
+        return visibilityFlags;
     }
 
     public int[] calculateVoteCounts(){

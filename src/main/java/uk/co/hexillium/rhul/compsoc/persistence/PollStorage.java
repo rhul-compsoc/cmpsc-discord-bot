@@ -19,10 +19,39 @@ public class PollStorage {
     private final HikariDataSource source;
     private final Logger logger = LogManager.getLogger(PollStorage.class);
 
+    /*
+    -- show who voted for who, in what polls
+select coalesce(mi.nickname, mi.username || '#' || mi.discrim) as "user",
+       opts.elem                                               as "candidate",
+       opts.name                                               as "position"
+from poll_selections as sel
+         left join member_information mi on mi.member_id = sel.member_id
+         inner join ((SELECT t.poll_id, a.elem, a.selections, t.description, t.name
+                      FROM poll_data t,
+                           unnest(t.options) WITH ORDINALITY a(elem, selections))) opts on opts.poll_id = sel.poll_id_fk
+where opts.poll_id in (33, 34, 35)
+  and pow(2, opts.selections - 1)::int & sel.selections <> 0
+order by position;
+
+-- show results
+select results.position, results.candidate, count(*)
+from (select opts.elem as "candidate",
+             opts.name as "position"
+      from poll_selections as sel
+               inner join (SELECT t.poll_id, a.elem, a.selections, t.name
+                           FROM poll_data t,
+                                unnest(t.options) WITH ORDINALITY a(elem, selections)) opts
+                          on opts.poll_id = sel.poll_id_fk
+      where opts.poll_id in (33, 34, 35)
+        and pow(2, opts.selections - 1)::int & sel.selections <> 0) as results
+group by (results.candidate, results.position)
+order by position, count(*) desc;
+     */
+
 
     private static final String SELECT_POLL_DATA_SKELETON =
             "select poll_id, options, started, finished, expires, max_options, name, description," +
-                    "channel_id, guild_id, message_id " +
+                    "channel_id, guild_id, message_id, visibility_flags " +
                     "from poll_data where poll_id = ?;";
 
     private static final String SELECT_POLL_SELECTIONS_FOR_POLL_DATA =
@@ -38,7 +67,7 @@ public class PollStorage {
                     "on conflict (poll_id_fk, member_id) do update set selections = ?;";
 
     private static final String INSERT_NEW_POLL_DATA =
-            "insert into poll_data(options, started, finished, expires, max_options, name, description) values (?, ?, ?, ?, ?, ?, ?) " +
+            "insert into poll_data(options, started, finished, expires, max_options, name, description, visibility_flags) values (?, ?, ?, ?, ?, ?, ?, ?) " +
                     "returning poll_id;";
 
     private static final String UPDATE_POLL_MESSAGE_LOCATION =
@@ -74,7 +103,8 @@ public class PollStorage {
                 set.getString("description"),
                 set.getLong("channel_id"),
                 set.getLong("guild_id"),
-                set.getLong("message_id")
+                set.getLong("message_id"),
+                set.getInt("visibility_flags")
         );
     }
 
@@ -121,7 +151,7 @@ public class PollStorage {
         }
     }
 
-    public PollData updatePollSetFinished(int pollId){
+    public void updatePollSetFinished(int pollId){
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(UPDATE_POLL_EXPIRE_POLL)){
 
@@ -132,7 +162,6 @@ public class PollStorage {
         } catch (SQLException ex){
             logger.error("Failed to update message expiry. ", ex);
         }
-        return null;
     }
 
     private List<PollSelection> fetchSelectionDataForPoll(int pollId){
@@ -198,7 +227,8 @@ public class PollStorage {
 
     public int insertNewPollData(String[] options, OffsetDateTime started,
                                        boolean finished, OffsetDateTime expires,
-                                       int maxOpts, String name, String description){
+                                       int maxOpts, String name, String description,
+                                       int visibilityFlags){
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(INSERT_NEW_POLL_DATA)){
 
@@ -209,6 +239,7 @@ public class PollStorage {
             statement.setInt(5, maxOpts);
             statement.setString(6, name);
             statement.setString(7, description);
+            statement.setInt(8, visibilityFlags);
 
 
             statement.execute();
@@ -222,6 +253,5 @@ public class PollStorage {
         }
         return -1;
     }
-
 
 }
