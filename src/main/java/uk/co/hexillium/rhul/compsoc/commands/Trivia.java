@@ -357,7 +357,6 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                     if (img != null) {
                         try {
                             ImageIO.write(img, "png", os);
-                            EnumSet
                         } catch (IOException ex) {
                             LOGGER.error("Failed to send image", ex);
                             return;
@@ -424,7 +423,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 this.lastQuestion = currentQuestion;
                 this.lastQuestionSolved = false;
                 boolean isRight = currentQuestion.isCorrectAnswer(answer);
-                Database.TRIVIA_STORAGE.updateMemberScore(user.getIdLong(), currentQuestion.getPoints(isRight), CURRENT_SEASON_NUMBER);
+                Database.TRIVIA_STORAGE.updateMemberScore(user.getIdLong(), channel.getIdLong(), currentQuestion.getPoints(isRight), CURRENT_SEASON_NUMBER);
                 updateMessage(currentQuestion, isRight, user, recentSentMessageID, channel);
                 this.currentQuestion = null;
             }
