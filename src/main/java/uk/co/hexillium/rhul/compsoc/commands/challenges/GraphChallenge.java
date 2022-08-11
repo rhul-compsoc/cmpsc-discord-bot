@@ -65,6 +65,11 @@ public abstract class GraphChallenge extends Challenge {
     }
 
     @Override
+    public String getDebugInformation() {
+        return "Graph: {" + graph.getDebugInfo() + "}";
+    }
+
+    @Override
     public BufferedImage getImage() {
         return graph.genImage(true, false);
     }
@@ -256,6 +261,9 @@ class DelaunayGraph {
         return Math.min(Math.max(min, input), max);
     }
 
+    public String getDebugInfo() {
+        return nodes.toString();
+    }
 }
 
 class Node {
@@ -300,11 +308,13 @@ class Node {
 
     @Override
     public String toString() {
+        String connections = neighbours.entrySet().stream()
+                .map(entry -> entry.getKey().getLabel() + "@" + entry.getValue())
+                .collect(Collectors.joining(","));
         return "Node{" +
                 "x=" + x +
                 ", y=" + y +
-                ", label='" + label + '\'' +
-                '}';
+                ", label='" + label + '\'' + ", connections=[" + connections + "]}";
     }
 }
 

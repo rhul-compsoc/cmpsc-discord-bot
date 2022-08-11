@@ -163,6 +163,17 @@ public class DijkstraChallenge extends GraphChallenge{
         return totalOperations;
     }
 
+    @Override
+    public String getDebugInformation() {
+        String graph = super.getDebugInformation();
+        return String.format("%s, paths={%s}, from={%s}, to={%s}",
+                graph,
+                Arrays.toString(this.solutions),
+                from,
+                to
+        );
+    }
+
     public Path[] findPath(Node source, Node destination){
         //Paths are sorted on their length, so the first path is the shortest
         PriorityQueue<Path> paths = new PriorityQueue<>(Comparator.comparing(Path::getCost));

@@ -328,10 +328,26 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             if (event.getFullArg().equalsIgnoreCase("debug")) {
                 event.reply(String.format("Type: %s,\n" +
                                 "Timeout: %d,\n" +
-                                "Question: %s",
+                                "Question: %s,\n" +
+                                "Other Debug info:\n%s",
                         currentQuestion.getClass().getName(),
                         currentQuestion.minimumSolveTimeSeconds(),
-                        currentQuestion.getQuestion()
+                        currentQuestion.getQuestion(),
+                        currentQuestion.getDebugInformation()
+
+                ));
+                return;
+            }
+            if (event.getFullArg().equalsIgnoreCase("debugprev")) {
+                event.reply(String.format("Type: %s,\n" +
+                                "Timeout: %d,\n" +
+                                "Question: %s,\n" +
+                                "Other Debug info:\n%s",
+                        lastQuestion.getClass().getName(),
+                        lastQuestion.minimumSolveTimeSeconds(),
+                        lastQuestion.getQuestion(),
+                        lastQuestion.getDebugInformation()
+
                 ));
                 return;
             }

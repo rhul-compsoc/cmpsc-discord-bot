@@ -56,6 +56,11 @@ public class BooleanAlgebra extends Challenge{
     }
 
     @Override
+    public String getDebugInformation() {
+        return head.toCompactString();
+    }
+
+    @Override
     public BufferedImage generateSolutionImage() {
         this.head.findSolution();
         this.head.markSolution();

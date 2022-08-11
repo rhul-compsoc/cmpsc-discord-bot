@@ -13,4 +13,5 @@ public abstract class Challenge {
     public abstract BufferedImage generateSolutionImage();
     public abstract int minimumSolveTimeSeconds();
     public abstract int getSolveOperationCount();
+    public abstract String getDebugInformation();
 }
