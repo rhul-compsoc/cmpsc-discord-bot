@@ -439,7 +439,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 this.lastQuestion = currentQuestion;
                 this.lastQuestionSolved = false;
                 boolean isRight = currentQuestion.isCorrectAnswer(answer);
-                Database.TRIVIA_STORAGE.updateMemberScore(user.getIdLong(), channel.getIdLong(), currentQuestion.getPoints(isRight), CURRENT_SEASON_NUMBER);
+                Database.TRIVIA_STORAGE.updateMemberScore(user.getIdLong(), channel.getGuild().getIdLong(), currentQuestion.getPoints(isRight), CURRENT_SEASON_NUMBER);
                 updateMessage(currentQuestion, isRight, user, recentSentMessageID, channel);
                 this.currentQuestion = null;
             }
