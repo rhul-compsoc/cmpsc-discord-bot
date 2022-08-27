@@ -28,6 +28,9 @@ import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.data.time.Day;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
+import org.jfree.chart.axis.ValueAxis;
+import org.jfree.data.time.Second;
+import org.jfree.chart.title.LegendTitle;
 import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.commands.challenges.*;
@@ -41,6 +44,7 @@ import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.awt.Font;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
@@ -54,6 +58,11 @@ import java.util.function.Consumer;
 public class Trivia extends Command implements EventListener, ComponentInteractionHandler, SlashCommandHandler {
 
     private static final int CURRENT_SEASON_NUMBER = 1;
+    private static final Color CHART_BACKGROUND_COLOR = Color.decode("#1e2124");
+    private static final Color CHART_FONT_COLOR = Color.WHITE;
+    private static final Font CHART_TITLE_FONT = new Font("Tahoma", Font.BOLD, 25);
+    private static final Font CHART_LABEL_FONT = new Font("Tahoma", Font.PLAIN, 20);
+    private static final BasicStroke CHART_STROKE_WIDTH = new BasicStroke(3f);
 
     private static final Logger LOGGER = LogManager.getLogger(Trivia.class);
 
@@ -720,7 +729,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 graphDrawThread.submit(() -> {
                     try {
                         if (event.getHook().isExpired()) return;
-                        BufferedImage image = drawChart(history, 1500, 1000);
+                        BufferedImage image = drawChart(history, 1200, 700);
                         postChart(event.getHook(), image);
                     } catch (Exception ex){
                         LOGGER.error("Failed drawing graph ", ex);
@@ -762,23 +771,38 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         timeData.forEach(timeSeries::addSeries);
 
         JFreeChart chart = ChartFactory.createTimeSeriesChart("Score History", "Day", "Points", timeSeries);
-        chart.setBackgroundPaint(new Color(0,0,0,0));
+
+        chart.getTitle().setPaint(CHART_FONT_COLOR);
+        chart.setBackgroundPaint(CHART_BACKGROUND_COLOR);
+
+        LegendTitle legend = chart.getLegend();
+        legend.setItemPaint(CHART_FONT_COLOR);
+        legend.setBackgroundPaint(CHART_BACKGROUND_COLOR);
+        legend.setItemFont(CHART_LABEL_FONT);
+
         XYPlot plot = (XYPlot) chart.getPlot();
-        plot.setBackgroundPaint(new Color(0,0,0,0));
+        plot.setBackgroundPaint(CHART_BACKGROUND_COLOR);
 
-        chart.setBorderPaint(Color.RED);
+        ValueAxis xAxis = plot.getDomainAxis();
+        xAxis.setLabelPaint(CHART_FONT_COLOR);
+        xAxis.setLabelFont(CHART_TITLE_FONT);
+        xAxis.setTickLabelPaint(CHART_FONT_COLOR);
+        xAxis.setTickLabelFont(CHART_LABEL_FONT);
 
-        chart.getLegend().setItemPaint(Color.RED);
-        chart.getLegend().setBackgroundPaint(new Color(0,0,0,0));
+        ValueAxis yAxis = plot.getRangeAxis();
+        yAxis.setLabelPaint(CHART_FONT_COLOR);
+        yAxis.setLabelFont(CHART_TITLE_FONT);
+        yAxis.setTickLabelPaint(CHART_FONT_COLOR);
+        yAxis.setTickLabelFont(CHART_LABEL_FONT);
 
         XYItemRenderer r = plot.getRenderer();
         if (r instanceof XYLineAndShapeRenderer) {
             XYLineAndShapeRenderer renderer = (XYLineAndShapeRenderer) r;
             renderer.setDefaultShapesFilled(true);
             renderer.setDrawSeriesLineAsPath(true);
-            renderer.setDefaultStroke(new BasicStroke(3));
+            renderer.setDefaultStroke(CHART_STROKE_WIDTH);
             for (int i = 0; i < timeData.size(); i++){
-                renderer.setSeriesStroke(i, new BasicStroke(3));
+                renderer.setSeriesStroke(i, CHART_STROKE_WIDTH);
             }
 
         }
