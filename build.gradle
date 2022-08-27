@@ -45,5 +45,6 @@ dependencies {
     // https://mvnrepository.com/artifact/io.github.classgraph/classgraph
     implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.114'
     implementation 'com.zaxxer:HikariCP:5.0.1'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.1'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.2.1'
+    implementation 'org.jfree:jfreechart:1.5.3'
 }

@@ -8,6 +8,7 @@ import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
@@ -19,15 +20,26 @@ import net.dv8tion.jda.api.utils.TimeUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.plot.XYPlot;
+import org.jfree.chart.renderer.xy.XYItemRenderer;
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
+import org.jfree.data.time.Day;
+import org.jfree.data.time.TimeSeries;
+import org.jfree.data.time.TimeSeriesCollection;
 import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.commands.challenges.*;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
+import uk.co.hexillium.rhul.compsoc.persistence.entities.ScoreHistory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
 
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
 import javax.imageio.ImageIO;
+import java.awt.BasicStroke;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -35,8 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
@@ -68,6 +79,8 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     private Challenge currentQuestion;
     private Challenge lastQuestion;
     private boolean lastQuestionSolved = false;
+
+    private final ExecutorService graphDrawThread = Executors.newSingleThreadExecutor();
 
     public Trivia() {
         super("Trivia", "Answer questions to score points", "Answer questions to score points", commands, "fun");
@@ -639,7 +652,16 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         commands.add(
                 new CommandData("leaderboard", "Show the leaderboard")
                         .addOption(OptionType.INTEGER, "page", "Page number", false)
-                        .addOption(OptionType.INTEGER, "season", "Season number", false)
+                        .addOption(OptionType.INTEGER, "season", "Season number", false));
+        commands.add(
+                new CommandData("scorehistory", "Show your score history")
+                        .addOption(OptionType.USER, "primaryuser", "The primary user to graph", true)
+                        .addOption(OptionType.INTEGER, "season", "The season to track. Defaults to the current season.", false)
+                        .addOption(OptionType.USER, "otheruser-0", "Another user to compare to", false)
+                        .addOption(OptionType.USER, "otheruser-1", "Another user to compare to", false)
+                        .addOption(OptionType.USER, "otheruser-2", "Another user to compare to", false)
+                        .addOption(OptionType.USER, "otheruser-3", "Another user to compare to", false)
+                        .addOption(OptionType.USER, "otheruser-4", "Another user to compare to", false)
         );
         return commands;
     }
@@ -669,6 +691,98 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                         .setEphemeral(false)
                         .queue();
             });
+        } else if (event.getName().equals("scorehistory")) {
+            if (event.getChannel().getIdLong() != channelID) {
+                event.reply("This isn't the correct channel for this!  Please use <#" + channelID + "> to view score histories.")
+                        .setEphemeral(true).queue();
+                return;
+            }
+            //noinspection ConstantConditions    - we know this is in a guild as we check the channel id above
+            long guildId = event.getGuild().getIdLong();
+            OptionMapping seasonOpt = event.getOption("season");
+            int season = seasonOpt == null ? CURRENT_SEASON_NUMBER : (int) seasonOpt.getAsLong();
+//
+//            OptionMapping usersOpt = event.getOption("otheruser");
+//            long[] users = usersOpt == null ? new long[]{event.getUser().getIdLong()} : new long[]{event.getUser().getIdLong(), usersOpt.getAsLong()};
+
+            long[] users = event.getOptions().stream().filter(om -> om.getType() == OptionType.USER)
+                    .mapToLong(OptionMapping::getAsLong)
+                    .toArray();
+
+            event.deferReply(false).queue();
+
+            Database.runLater(() -> {
+                ScoreHistory[] history = Database.TRIVIA_STORAGE.fetchScoreHistory(season, guildId, users);
+                if (history.length == 0){
+                    event.getHook().sendMessage("Nothing to process, either there was an error, or no history exists for your selection.").queue();
+                    return;
+                }
+                graphDrawThread.submit(() -> {
+                    try {
+                        if (event.getHook().isExpired()) return;
+                        BufferedImage image = drawChart(history, 1500, 1000);
+                        postChart(event.getHook(), image);
+                    } catch (Exception ex){
+                        LOGGER.error("Failed drawing graph ", ex);
+                        event.getHook().sendMessage("Failed to draw graph: " + ex.getMessage()).queue();
+                    }
+                });
+            });
+            // extract users + season and validate.
+            // ACK message
+            // call to database to fetch data
+            // async draw chart
+            // update message with the chart
         }
     }
+
+    private void postChart(InteractionHook hook, BufferedImage image){
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(image, "png", os);
+        } catch (IOException ex) {
+            LOGGER.error("Failed to send image", ex);
+            return;
+        }
+        hook.sendFile(os.toByteArray(), "chart.png").queue();
+    }
+
+    private BufferedImage drawChart(ScoreHistory[] scores, int width, int height){
+        List<TimeSeries> timeData = new ArrayList<>();
+        for (ScoreHistory history : scores){
+            TimeSeries series = new TimeSeries(history.getUsername());
+            Day[] days = history.getDays();
+            int[] userScores = history.getScores();
+            for (int i = 0; i < days.length; i++) {
+                series.add(days[i], userScores[i]);
+            }
+            timeData.add(series);
+        }
+        TimeSeriesCollection timeSeries = new TimeSeriesCollection();
+        timeData.forEach(timeSeries::addSeries);
+
+        JFreeChart chart = ChartFactory.createTimeSeriesChart("Score History", "Day", "Points", timeSeries);
+        chart.setBackgroundPaint(new Color(0,0,0,0));
+        XYPlot plot = (XYPlot) chart.getPlot();
+        plot.setBackgroundPaint(new Color(0,0,0,0));
+
+        chart.setBorderPaint(Color.RED);
+
+        chart.getLegend().setItemPaint(Color.RED);
+        chart.getLegend().setBackgroundPaint(new Color(0,0,0,0));
+
+        XYItemRenderer r = plot.getRenderer();
+        if (r instanceof XYLineAndShapeRenderer) {
+            XYLineAndShapeRenderer renderer = (XYLineAndShapeRenderer) r;
+            renderer.setDefaultShapesFilled(true);
+            renderer.setDrawSeriesLineAsPath(true);
+            renderer.setDefaultStroke(new BasicStroke(3));
+            for (int i = 0; i < timeData.size(); i++){
+                renderer.setSeriesStroke(i, new BasicStroke(3));
+            }
+
+        }
+        return chart.createBufferedImage(width, height);
+    }
 }
+
