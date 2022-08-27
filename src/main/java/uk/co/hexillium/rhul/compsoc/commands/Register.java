@@ -25,7 +25,7 @@ public class Register extends Command implements EventListener {
 
     private static final String[] COMMANDS = {"register", "submit", "verify"};
     private static final Pattern LOGIN_NAME_VERIFY = Pattern.compile("(?:[a-zA-Z]{4}\\d{3}|(?:[a-zA-Z]+\\.){2}\\d{4})@(?:live\\.)?rhul\\.ac\\.uk");
-    private static final Pattern STUDENT_NUMBER_VERIFY = Pattern.compile("100\\d{6}");
+    private static final Pattern STUDENT_NUMBER_VERIFY = Pattern.compile("10\\d{7}");
     private static final long CHANNEL_ID = 768209780124418058L;
     private static final long VERIFIED_ROLE_ID = 768202524163047484L;
     private static final long SERVER_MEMBER_ROLE_ID = 620613291844173844L;
