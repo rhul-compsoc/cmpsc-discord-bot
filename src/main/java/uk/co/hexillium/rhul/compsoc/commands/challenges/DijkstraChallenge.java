@@ -205,7 +205,9 @@ public class DijkstraChallenge extends GraphChallenge{
                 int newCost = path.getCost() + path.getHead().getNeighbours().get(child);
                 totalOperations++;
                 if (distances.containsKey(child)){
-                    if (newCost >= distances.get(child)){
+                    //if we have already found a shorter path to this node, then don't create a new path to it.
+                    //we need to consider equal paths too, so that multiple correct solutions for this puzzle are considered.
+                    if (newCost > distances.get(child)){
                         continue;
                     }
                 }
