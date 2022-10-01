@@ -18,6 +18,7 @@ The `/hello` endpoint can be used to test the configuration.  Successful connect
  - `/guild/<guildid>/` contains the following endpoints:
    - GET `/info` -> returns the guild data
    - GET `/members` -> returns information on all members of this guild
+   - POST `/memberships` -> inform the bot of the current SU memberships
    - GET `/member/<memberid or userid>/info` -> returns information on this specific member
    - `/channels/<channelid>` contains the following endpoints:
      - POST `/sendmessage` -> sends a message from the bot to this channel, with the contents.
@@ -68,3 +69,9 @@ Example JSON DELETE:
 
     {"userID":"187979032904728576",
     "bindingID":"10"}
+
+### POST /guilds/:guildid/memberships
+
+Example JSON POST:
+
+    {"ids":["123", "456"]}

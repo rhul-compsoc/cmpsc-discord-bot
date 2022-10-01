@@ -271,7 +271,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     public void handleSlashCommand(SlashCommandEvent event) {
         switch (event.getName()) {
             case "poll":
-                if (event.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == 500612754185650177L)) {
+                if (event.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == 1024355501124898867L)) {
                     event.reply(">:(").setEphemeral(true).queue();
                     return;
                 }

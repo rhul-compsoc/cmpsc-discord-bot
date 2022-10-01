@@ -312,7 +312,7 @@ public class Roles implements ComponentInteractionHandler, SlashCommandHandler {
                 handleShowRoles(event.getMember(), event.getHook());
                 break;
             case "manageroles":
-                if (!event.getMember().getRoles().contains(event.getGuild().getRoleById(500612754185650177L))) {
+                if (!event.getMember().getRoles().contains(event.getGuild().getRoleById(1024355501124898867L))) {
                     event.reply(">:(").setEphemeral(true).queue();
                     return;
                 }

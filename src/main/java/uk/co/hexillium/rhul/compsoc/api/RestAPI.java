@@ -2,10 +2,7 @@ package uk.co.hexillium.rhul.compsoc.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.GuildChannel;
-import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.exceptions.ParsingException;
 import net.dv8tion.jda.api.utils.data.DataArray;
 import net.dv8tion.jda.api.utils.data.DataObject;
@@ -24,12 +21,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import static spark.Spark.*;
 
 public class RestAPI {
 
-    private Logger logger = LogManager.getLogger(RestAPI.class);
+    private final Logger logger = LogManager.getLogger(RestAPI.class);
 
     private Filter authCheck;
     private Route getMembers;
@@ -45,14 +43,15 @@ public class RestAPI {
     private Filter channelCheck;
     private Route getGuildInfo;
     private Route sendMessage;
+    private Route updateMembershipRoles;
 
-    private ScheduledExecutorService timer;
+    private final ScheduledExecutorService timer;
 
-    private ObjectMapper mapper;
+    private final ObjectMapper mapper;
 
     private List<Token> tokens;
 
-    private Map<Request, Long> timings = new HashMap<>();
+    private final Map<Request, Long> timings = new HashMap<>();
 
     public RestAPI(int port, String slug, JDA jda, ObjectMapper om){
         this.mapper = om;
@@ -83,6 +82,7 @@ public class RestAPI {
                 before("/*", guildCheck);
                 get("/info", getGuildInfo);
                 get("/members", getMembers);
+                post("/memberships", updateMembershipRoles);
                 get("/member/:memberid/info", getMemberInfo);
                 path("/channels/:channelid", () -> {
                     before("/*", channelCheck);
@@ -359,6 +359,57 @@ public class RestAPI {
             }
 
         }));
+        updateMembershipRoles = (request, response) -> {
+            @SuppressWarnings("unchecked")
+            HashMap<String, Object> map = om.readValue(request.body(), HashMap.class);
+            Object idsObj = map.get("ids");
+            if (idsObj == null){
+                response.status(400);
+                return "Missing \"ids\" array";
+            }
+            if (!(idsObj instanceof List)){
+                response.status(400);
+                return "\"ids\" is not of type array";
+            }
+            long guildId = Long.parseLong(request.params(":guildid"));
+
+            @SuppressWarnings("unchecked")
+            List<String> ids = (List<String>) map.get("ids");
+
+            List<Long> discordUsers = Database.STUDENT_VERIFICATION.findStudentsWithSUIds(ids.toArray(new String[0]));
+
+            if (discordUsers == null){
+                response.status(500);
+                return "Failure running server-side SQL.";
+            }
+
+            HashSet<Long> discordUsersSet = new HashSet<>(discordUsers);
+
+            long roleId = 1019906006303649802L;
+            Guild guild = jda.getGuildById(guildId);
+            Role role = guild.getRoleById(roleId);
+
+            Set<Member> membersWithRole = guild.getMemberCache().stream().filter(m -> m.getRoles().contains(role)).collect(Collectors.toSet());
+            Set<Member> membersRoleTarget = guild.getMemberCache().stream().filter(m -> discordUsersSet.contains(m.getIdLong())).collect(Collectors.toSet());
+
+            HashSet<Member> common = new HashSet<>(membersWithRole);
+            common.retainAll(membersRoleTarget);
+
+            membersRoleTarget.removeAll(common);
+            membersWithRole.removeAll(common);
+
+
+            membersWithRole.forEach(m -> m.getGuild().removeRoleFromMember(m, role).queue());
+            membersRoleTarget.forEach(m -> m.getGuild().addRoleToMember(m, role).queue());
+
+            String result = "Added role to " + membersRoleTarget.size() + " members, removed role from " + membersWithRole.size() + " members, and " + common.size() + " unchanged.";
+
+            logger.info(result);
+
+            response.status(200);
+            return result;
+
+        };
     }
 
 

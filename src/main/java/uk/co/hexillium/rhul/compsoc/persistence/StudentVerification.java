@@ -51,6 +51,9 @@ public class StudentVerification {
     private final static String IS_DISCORD_ACCOUNT_VALIDATED =
             "select student_verified from student_verification where student_discord_snowflake = ? order by student_pk desc limit 1;";
 
+    private final static String FIND_DISCORD_IDS_MATCHING_SU_ID =
+            "select student_discord_snowflake from student_verification where student_id in ?;";
+
     private HikariDataSource source;
 
     public StudentVerification(HikariDataSource source){
@@ -237,6 +240,24 @@ public class StudentVerification {
 
         } catch (SQLException e) {
             LOGGER.error("Failed to fetch verification message update");
+        }
+        return null;
+    }
+
+    public List<Long> findStudentsWithSUIds(String[] suIDs){
+        try (Connection connection = source.getConnection();
+             PreparedStatement statement = connection.prepareStatement(FIND_DISCORD_IDS_MATCHING_SU_ID)) {
+            statement.setArray(1, connection.createArrayOf("text[]", suIDs));
+
+            ResultSet set = statement.executeQuery();
+            List<Long> found = new ArrayList<>();
+            while (set.next()){
+                found.add(set.getLong(1));
+            }
+            return found;
+
+        } catch (SQLException ex){
+            LOGGER.error("Failed to fetch members with matching SU IDS", ex);
         }
         return null;
     }
