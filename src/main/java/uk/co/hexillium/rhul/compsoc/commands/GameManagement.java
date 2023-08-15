@@ -1,19 +1,15 @@
 package uk.co.hexillium.rhul.compsoc.commands;
 
-import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
-import net.dv8tion.jda.api.interactions.commands.build.CommandData;
-import net.dv8tion.jda.api.interactions.commands.build.OptionData;
-import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
+import net.dv8tion.jda.api.interactions.commands.build.*;
 import uk.co.hexillium.rhul.compsoc.Disabled;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GameAccountBinding;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,7 +21,7 @@ public class GameManagement implements SlashCommandHandler {
     @Override
     public List<CommandData> registerGlobalCommands() {
         return List.of(
-                new CommandData("games", "Manage and register your game bindings")
+                Commands.slash("games", "Manage and register your game bindings")
                         .addSubcommands(
                                 new SubcommandData("list", "Show all of your current bindings")
                                         .addOptions(new OptionData(OptionType.STRING, "game", "Filter by a specific game", false)
@@ -83,7 +79,7 @@ public class GameManagement implements SlashCommandHandler {
     }
 
     @Override
-    public void handleSlashCommand(SlashCommandEvent event) {
+    public void handleSlashCommand(SlashCommandInteractionEvent event) {
         if (event.getGuild() == null) {
             event.reply("This command must be executed from a Guild context.").setEphemeral(true).queue();
         }

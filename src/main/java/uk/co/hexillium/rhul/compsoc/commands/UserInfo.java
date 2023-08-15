@@ -1,7 +1,7 @@
 package uk.co.hexillium.rhul.compsoc.commands;
 
 import net.dv8tion.jda.api.entities.Member;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.Disabled;
 import uk.co.hexillium.rhul.compsoc.constants.Regex;
@@ -23,12 +23,12 @@ public class UserInfo extends Command {
         if (canRunCommand(event.getMember())){
             //run the command, but put the data in the commands channel
             boolean ping = false;
-            if (event.getTextChannel().getIdLong() != 500621482901372928L){
+            if (event.getGuildMessageChannel().getIdLong() != 500621482901372928L){
                 event.getMessage().delete().queue();
                 ping = true;
             }
-            TextChannel target = event.getGuild().getTextChannelById(500621482901372928L);
-            if (target == null) target = event.getTextChannel(); // unlikely fallback
+            GuildMessageChannel target = event.getGuild().getTextChannelById(500621482901372928L);
+            if (target == null) target = event.getGuildMessageChannel(); // unlikely fallback
 
             String subject = event.getFullArg();
             long subjectId = extractID(subject);
@@ -62,6 +62,6 @@ public class UserInfo extends Command {
     }
 
     private boolean canRunCommand(Member member){
-        return member.getRoles().contains(member.getGuild().getRoleById(500612754185650177L));
+        return member.getRoles().contains(member.getGuild().getRoleById(1024355501124898867L));
     }
 }

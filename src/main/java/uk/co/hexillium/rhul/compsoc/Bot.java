@@ -13,13 +13,14 @@ import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.api.RestAPI;
 import uk.co.hexillium.rhul.compsoc.chat.ChatXP;
 import uk.co.hexillium.rhul.compsoc.handlers.InformationUpdateHandler;
-import uk.co.hexillium.rhul.compsoc.handlers.MessageAccumulator;
+import uk.co.hexillium.rhul.compsoc.mail.Mail;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
 import javax.security.auth.login.LoginException;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -28,6 +29,7 @@ public class Bot {
 
     public static final String[] emojis = {"✅", "❓", "❌"};
     public static final Database database = Database.getInstance();
+    public static Mail mail;
     static final Logger logger = LogManager.getLogger(Bot.class);
     static ChatXP chatXP;
     static JDA jda;
@@ -36,6 +38,26 @@ public class Bot {
 //        Configurator.setLevel(BotRateLimiter.class.getName(), Level.TRACE);
 //        Configurator.setLevel(RateLimiter.class.getName(), Level.TRACE);
         //read the token in
+
+        Properties properties;
+        Path mailconfig = Paths.get("mail.properties");
+        properties = new Properties(Mail.defaultMailProperties);
+        if (!Files.exists(mailconfig)){
+            properties.store(Files.newBufferedWriter(mailconfig), "mail.properties");
+            mail = null;
+            logger.warn("Missing mail properties.  Mail will not work with these unset.");
+        } else {
+            properties.load(Files.newBufferedReader(mailconfig));
+
+            Mail.MailConfiguration configuration = new Mail.MailConfiguration();
+            configuration.setFromAddress(properties.getProperty("mail.from.email"));
+            configuration.setUsername(properties.getProperty("host.mailbox.username"));
+            configuration.setPassword(properties.getProperty("host.mailbox.password"));
+            configuration.setPort(Short.parseShort(properties.getProperty("host.port")));
+            configuration.setHostUrl(properties.getProperty("host.url"));
+
+            mail = new Mail(configuration);
+        }
         jda = initBot();
 //        new CommandDispatcher();
 
@@ -66,7 +88,7 @@ public class Bot {
         jda.awaitReady();
         InformationUpdateHandler updateHandler = new InformationUpdateHandler(jda);
         updateHandler.ready(jda);
-        MessageAccumulator accumulator = new MessageAccumulator(jda);
+        //MessageAccumulator accumulator = new MessageAccumulator(jda);
         logger.info("CompSocBot started, running JDA version " + JDAInfo.VERSION + "!");
         return jda;
     }

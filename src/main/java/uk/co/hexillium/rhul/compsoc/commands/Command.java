@@ -6,7 +6,9 @@ import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.time.JobScheduler;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public abstract class Command {
 
@@ -15,8 +17,8 @@ public abstract class Command {
     protected String[] commands;
     protected String name;
     protected String category;
-    protected Permission[] requiredBotPermissions = new Permission[]{};
-    protected Permission[] requiredUserPermissions = new Permission[]{};
+    protected List<Permission> requiredBotPermissions = new ArrayList<Permission>();
+    protected List<Permission> requiredUserPermissions = new ArrayList<Permission>();
     private JobScheduler scheduler;
 
     public Command(String name, String description, String help, String[] commands, String category){
@@ -32,7 +34,7 @@ public abstract class Command {
      * @return the String for the no perms message
      */
     public String getNoBotPermissions(){
-        return "I don't have all of the required permissions to do this!.\n\nI need: " + Arrays.toString(requiredBotPermissions);
+        return "I don't have all of the required permissions to do this!.\n\nI need: " + requiredBotPermissions;
     }
 
     /**
@@ -40,7 +42,7 @@ public abstract class Command {
      * @return the String for the no perms message
      */
     public String getNoUserPermissions(){
-        return "You don't have all of the required permissions to do this!.\n\nYou need: " + Arrays.toString(requiredUserPermissions);
+        return "You don't have all of the required permissions to do this!.\n\nYou need: " + requiredUserPermissions;
     }
 
     /**
@@ -89,7 +91,7 @@ public abstract class Command {
      * @return true if all permissions are present, else false
      */
     public boolean testBotPermissions(CommandEvent event){
-        if (event.isGuildMessage() && event.getSelfMember().hasPermission(event.getTextChannel(), requiredBotPermissions)){
+        if (event.isGuildMessage() && event.getSelfMember().hasPermission(event.getMessage().getGuildChannel(), requiredBotPermissions)){
             return true;
         }
         return !event.isGuildMessage();
@@ -101,7 +103,7 @@ public abstract class Command {
      * @return true if all permissions are present, else false
      */
     public boolean testUserPermissions(CommandEvent event){
-        if (event.isGuildMessage() && event.getMember() != null && event.getMember().hasPermission(event.getTextChannel(), requiredUserPermissions)){
+        if (event.isGuildMessage() && event.getMember() != null && event.getMember().hasPermission(event.getMessage().getGuildChannel(), requiredUserPermissions)){
             return true;
         }
         return !event.isGuildMessage();

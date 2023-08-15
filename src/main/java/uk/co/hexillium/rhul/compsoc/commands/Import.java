@@ -1,11 +1,13 @@
 package uk.co.hexillium.rhul.compsoc.commands;
 
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
+import uk.co.hexillium.rhul.compsoc.Disabled;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 
+@Disabled
 public class Import extends Command {
 
     private static final String[] commands = {"importtodb"};
@@ -22,12 +24,12 @@ public class Import extends Command {
         Database.runLater( () -> {
             Database.EXPERIENCE_STORAGE.importMembers(event.getGuild().getMemberCache());
         });
-        for (TextChannel channel : event.getGuild().getTextChannels()){
+        for (GuildMessageChannel channel : event.getGuild().getTextChannels()){
             Database.runLater(() -> backlogMessages(channel));
         }
     }
 
-    private void backlogMessages(TextChannel channel){
+    private void backlogMessages(GuildMessageChannel channel){
         channel.getIterableHistory().takeWhileAsync((m) -> true).thenAcceptAsync(
                 (msgs) -> {
                     Database.MESSAGE_STORAGE.insertBulkMessage(msgs);

@@ -2,8 +2,8 @@ package uk.co.hexillium.rhul.compsoc.commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.utils.TimeFormat;
 import net.dv8tion.jda.api.utils.data.DataObject;
 import org.apache.logging.log4j.LogManager;
@@ -69,7 +69,7 @@ public class Reminder extends Command {
 
     private void handleSend(ReminderEntity reminder){
 
-        TextChannel tc = jda.getTextChannelById(reminder.getTargetChannel());
+        MessageChannel tc = jda.getTextChannelById(reminder.getTargetChannel());
         boolean useUserChannel = false;
         if (tc == null){
             User user = jda.getUserById(reminder.getAuthor());
@@ -91,10 +91,10 @@ public class Reminder extends Command {
         String message = "<@" + reminder.getAuthor() + "> ";
         if (useUserChannel){
             jda.openPrivateChannelById(reminder.getAuthor()).queue(pc -> {
-                pc.sendMessageEmbeds(embed.build()).content(message).queue();
+                pc.sendMessageEmbeds(embed.build()).addContent(message).queue();
             });
         } else {
-            tc.sendMessageEmbeds(embed.build()).content(message).queue();
+            tc.sendMessageEmbeds(embed.build()).addContent(message).queue();
         }
     }
 
@@ -176,7 +176,7 @@ public class Reminder extends Command {
                 + " (that's " + TimeFormat.RELATIVE.format(target) + "  -- " + diff + ").");
 
         ReminderEntity reminder = new ReminderEntity(event.getMessage().getJumpUrl(),
-                event.getTextChannel().getIdLong(), event.getAuthor().getIdLong(), target, message);
+                event.getGuildMessageChannel().getIdLong(), event.getAuthor().getIdLong(), target, message);
         getScheduler().submitJob(new Job(-1, System.currentTimeMillis(), target.toEpochSecond() * 1000, "reminder", reminder.toDataObject()));
     }
 

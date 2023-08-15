@@ -1,6 +1,6 @@
 package uk.co.hexillium.rhul.compsoc.persistence.entities;
 
-import net.dv8tion.jda.api.interactions.components.ButtonStyle;
+import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;

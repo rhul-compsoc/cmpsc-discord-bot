@@ -24,6 +24,8 @@ public class Database {
     public static GuildData GUILD_DATA;
     public static JobStorage JOB_STORAGE;
     public static StudentVerification STUDENT_VERIFICATION;
+    public static EmailVerification EMAIL_VERIFICATION;
+
     public static AuthTokenStorage AUTH_TOKEN_STORAGE;
     public static ExperienceStorage EXPERIENCE_STORAGE;
     public static TriviaStorage TRIVIA_STORAGE;
@@ -72,6 +74,7 @@ public class Database {
         GUILD_DATA = new GuildData(source);
         JOB_STORAGE = new JobStorage(source);
         STUDENT_VERIFICATION = new StudentVerification(source);
+        EMAIL_VERIFICATION = new EmailVerification(source);
         AUTH_TOKEN_STORAGE = new AuthTokenStorage(source);
         EXPERIENCE_STORAGE = new ExperienceStorage(source);
         TRIVIA_STORAGE = new TriviaStorage(source);

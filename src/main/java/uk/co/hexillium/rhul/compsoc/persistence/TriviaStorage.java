@@ -64,6 +64,30 @@ public class TriviaStorage {
             "         left join member_information mi " +
             "                   on score_data.guild_id = mi.guild_id and score_data.member_snowflake = mi.member_id; ";
 
+    private final static String fetchScoreHistoryForAllUsers = "" +
+            "with data as (select nh.member_snowflake,\n" +
+            "                     nh.season_num,\n" +
+            "                     nh.guild_id,\n" +
+            "                     date_trunc('day', nh.point_time) as day,\n" +
+            "                     sum(score_modifier)              as score\n" +
+            "              from numvember_history nh\n" +
+            "              -- where member_snowflake = any (?)\n" +
+            "                where season_num = ?\n" +
+            "                and guild_id = ?\n" +
+            "              group by nh.season_num, nh.member_snowflake, nh.guild_id, day)\n" +
+            "select day, season_num, member_snowflake, score_data.guild_id, score::int[], mi.username || '#' || mi.discrim as name\n" +
+            "from (select array_agg(day) as day, season_num, member_snowflake, guild_id, array_agg(score) as score\n" +
+            "      from (select day,\n" +
+            "                   season_num,\n" +
+            "                   member_snowflake,\n" +
+            "                   guild_id,\n" +
+            "                   sum(score)\n" +
+            "                   over (partition by member_snowflake, season_num, guild_id order by day asc rows between unbounded preceding and current row) as score\n" +
+            "            from data) as d\n" +
+            "      group by member_snowflake, season_num, guild_id) score_data\n" +
+            "         left join member_information mi\n" +
+            "                   on score_data.guild_id = mi.guild_id and score_data.member_snowflake = mi.member_id;";
+
     private final static String totalPages = "select count(*) as count from numvember where season_id = ?;";
     private HikariDataSource source;
 
@@ -80,6 +104,39 @@ public class TriviaStorage {
             statement.setArray(1, connection.createArrayOf("bigint", Arrays.stream(userIDs).boxed().toArray()));
             statement.setInt(2, season);
             statement.setLong(3, guildId);
+
+            ResultSet set = statement.executeQuery();
+
+            List<ScoreHistory> scoreHistory = new ArrayList<>();
+
+            while (set.next()){
+                // day, season_num, member_snowflake, score_data.guild_id, score,  name
+                scoreHistory.add(new ScoreHistory(
+                        set.getLong("member_snowflake"),
+                        set.getString("name"),
+                        set.getLong("guild_id"),
+                        set.getInt("season_num"),
+                        convertSQLTimestamp((Timestamp[]) set.getArray("day").getArray()),
+//                        set.getObject("day", OffsetDateTime[].class),
+                        Arrays.stream((Integer[]) set.getArray("score").getArray()).mapToInt(Integer::intValue).toArray()
+                ));
+            }
+
+            return scoreHistory.toArray(new ScoreHistory[0]);
+
+        }catch (SQLException ex){
+            LOGGER.error("Failed to fetch history", ex);
+            return new ScoreHistory[0];
+        }
+    }
+
+    public ScoreHistory[] fetchScoreHistoryForAllUsers(int season, long guildId){
+        try (Connection connection = source.getConnection();
+             PreparedStatement statement = connection.prepareStatement(fetchScoreHistoryForAllUsers)){
+
+//            statement.setString(1, "(" + Arrays.stream(userIDs).mapToObj(Long::toString).collect(Collectors.joining(", ")) + ")");
+            statement.setInt(1, season);
+            statement.setLong(2, guildId);
 
             ResultSet set = statement.executeQuery();
 

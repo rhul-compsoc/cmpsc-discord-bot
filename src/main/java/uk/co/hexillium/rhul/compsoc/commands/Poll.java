@@ -3,28 +3,32 @@ package uk.co.hexillium.rhul.compsoc.commands;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.entities.TextChannel;
-import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
-import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.GenericSelectMenuInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.Button;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
-import net.dv8tion.jda.api.interactions.components.selections.SelectionMenu;
-import net.dv8tion.jda.api.requests.restaction.MessageAction;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
+import net.dv8tion.jda.api.requests.restaction.MessageEditAction;
 import net.dv8tion.jda.api.utils.TimeFormat;
 import net.dv8tion.jda.api.utils.data.DataObject;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.ComponentInteractionHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.Job;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.PollData;
@@ -119,7 +123,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     }
 
     public ActionRow genVoteMenu(int id, String[] options, int currentSelection, int max) {
-        SelectionMenu.Builder bld = SelectionMenu.create(handleIDs[1] + "|" + id);
+        StringSelectMenu.Builder bld = StringSelectMenu.create(handleIDs[1] + "|" + id);
         bld.setMinValues(0);
         bld.setMaxValues(max);
         for (int i = 0; i < options.length; i++) {
@@ -150,15 +154,16 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                 logger.error("Cannot find guild");
                 return;
             }
-            TextChannel channel = guild.getTextChannelById(data.getChannelId());
-            if (channel == null) {
+            GuildChannel gc = guild.getGuildChannelById(data.getChannelId());
+            if (gc == null) {
                 logger.error("Cannot find channel");
                 return;
             }
+            if (!(gc instanceof GuildMessageChannel channel)) return;
             expired = expired || data.isFinished() || data.getExpires().isBefore(OffsetDateTime.now());
-            MessageAction action = channel.editMessageEmbedsById(data.getMessageId(), generateEmbed(data, expired));
+            MessageEditAction action = channel.editMessageEmbedsById(data.getMessageId(), generateEmbed(data, expired));
             if (expired) {
-                action.setActionRows(genActionRow(id, true)).queue(null, logger::error);
+                action.setComponents(genActionRow(id, true)).queue(null, logger::error);
             } else {
                 action.queue(null, logger::error);
             }
@@ -172,7 +177,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     }
 
     @Override
-    public void handleButtonInteraction(ButtonClickEvent interaction, String button) {
+    public void handleButtonInteraction(ButtonInteractionEvent interaction, String button) {
         String[] data = button.split(":");
         switch (data[0]) {
             case "v":
@@ -184,15 +189,16 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                     interaction
                             .getHook().sendMessage("Make or adjust your selection: ")
 //                            .reply("Make or adjust your selection:")
-                            .addActionRows(genVoteMenu(id, poll.getOptions(), selection == null ? 0 : selection.getChoices(), poll.getMax_options()))
+                            .setComponents(genVoteMenu(id, poll.getOptions(), selection == null ? 0 : selection.getChoices(), poll.getMax_options()))
                             .queue();
                 });
         }
     }
 
     @Override
-    public void handleSelectionMenuInteraction(SelectionMenuEvent interaction) {
-        int id = Integer.parseInt(interaction.getComponentId().split("\\|")[1]);
+    public void handleSelectionMenuInteraction(GenericSelectMenuInteractionEvent<?,?> genericInteraction) {
+        if (!(genericInteraction instanceof StringSelectInteractionEvent interaction)) return;
+        int id = Integer.parseInt(interaction.getId().split("\\|")[1]);
         int set = 0;
         for (String selection : interaction.getValues()) {
             set |= 1 << Integer.parseInt(selection);
@@ -209,7 +215,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
             updateMessage(interaction.getJDA(), id);
             interaction.getHook().editOriginal("Thanks for voting!  Your selection has been updated successfully.").queue();
         });
-        interaction.editMessage("Submitting vote...").setActionRows().queue();
+        interaction.editMessage("Submitting vote...").setComponents().queue();
     }
 
     @Override
@@ -221,7 +227,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     public List<CommandData> registerGlobalCommands() {
 //        if (true) return Collections.emptyList();
         return List.of(
-                new CommandData("poll", "Manage and create polls via this command")
+                Commands.slash("poll", "Manage and create polls via this command")
                         .addSubcommands(
                                 new SubcommandData("create", "Create your own poll.")
                                         .addOption(OptionType.STRING, "name",        "The name or title of the poll", true)
@@ -268,11 +274,11 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     }
 
     @Override
-    public void handleSlashCommand(SlashCommandEvent event) {
+    public void handleSlashCommand(SlashCommandInteractionEvent event) {
         switch (event.getName()) {
             case "poll":
                 if (event.getMember().getRoles().stream().noneMatch(role -> role.getIdLong() == 1024355501124898867L)) {
-                    event.reply(">:(").setEphemeral(true).queue();
+                    event.reply("You do not have permission to use this.").setEphemeral(true).queue();
                     return;
                 }
                 if (event.getSubcommandName() == null) {
@@ -333,8 +339,8 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
                             DataObject dobj = DataObject.empty();
                             dobj.put("poll_id", pollId);
                             getScheduler().submitJob(new Job(-1, System.currentTimeMillis(), Instant.from(expires).toEpochMilli(), "poll_expiry", dobj));
-                            event.getTextChannel().sendMessageEmbeds(generateEmbed(data, false))
-                                    .setActionRows(genActionRow(pollId))
+                            event.getGuildChannel().sendMessageEmbeds(generateEmbed(data, false))
+                                    .addComponents(genActionRow(pollId))
                                     .queue(msg ->
                                             Database.runLater(
                                                     () -> {

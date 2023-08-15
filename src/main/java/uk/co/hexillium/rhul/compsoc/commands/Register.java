@@ -3,12 +3,15 @@ package uk.co.hexillium.rhul.compsoc.commands;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.entities.channel.ChannelType;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
-import net.dv8tion.jda.api.events.message.guild.react.GuildMessageReactionAddEvent;
-import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
-import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.events.message.react.MessageReactionAddEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
+import net.dv8tion.jda.api.utils.FileUpload;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -33,12 +36,6 @@ public class Register extends Command implements EventListener {
 //    private static final long VERIFIED_ROLE_ID = 768265402593574953L;
 
 
-    //todo add student and membership roles to people who left and rejoin
-    //todo ping tapir for data on membership for completed verifications
-
-    //todo https://compsocbot:password123@tapir.compsoc.dev/admin/compsocbot/
-    //
-
     public Register() {
         super("Register", "Register your university identity", "`{{cmd_prefix}}testCommand`, idk really what it does."
                 , COMMANDS, "identity");
@@ -50,18 +47,18 @@ public class Register extends Command implements EventListener {
 
     @Override
     public void handleCommand(CommandEvent event) {
-        if (event.getChannel() instanceof GuildChannel){
+        if (event.getChannel().getType().isGuild()){
             //send a dm
             boolean canSubmit = Database.STUDENT_VERIFICATION.canSubmitRequest(event.getAuthor().getIdLong());
             event.getUser().openPrivateChannel().queue(pc -> {
                 if (canSubmit) {
-                    pc.sendMessage(getYourPrivateData()).queue(succ -> {
+                    pc.sendMessageEmbeds(getYourPrivateData()).queue(succ -> {
                         event.getMessage().delete().queue();
                     }, failure -> {
                         event.sendEmbed("Failed to DM you.", "I need to be able to slide into your DMs to send you the command usage.", 0xff0000);
                     });
                 } else {
-                    pc.sendMessage(alreadyRegistered()).queue(succ -> {
+                    pc.sendMessageEmbeds(alreadyRegistered()).queue(succ -> {
                         event.getMessage().delete().queue();
                     }, failure -> {
                         event.sendEmbed("You're already registered.", "And I can't DM you. Sad times.", 0xff0000);
@@ -70,7 +67,7 @@ public class Register extends Command implements EventListener {
             });
             return;
         }
-        if (!(event.getChannel() instanceof PrivateChannel)){
+        if (!(event.getChannel().getType() == ChannelType.PRIVATE)){
             //??? what happened
             logger.error("I don't know what happened: " + event.getChannel().getClass().getName());
             return;
@@ -110,7 +107,7 @@ public class Register extends Command implements EventListener {
         }
 
         //emergency debugging
-        TextChannel channel = event.getJDA().getTextChannelById(CHANNEL_ID);
+        MessageChannel channel = event.getJDA().getTextChannelById(CHANNEL_ID);
         if (channel == null){
             logger.error("Cannot find channel!");
             logger.info(event.getJDA().getTextChannelCache().asList());
@@ -121,12 +118,14 @@ public class Register extends Command implements EventListener {
 
         Message.Attachment attachment = event.getMessage().getAttachments().get(0);
         attachment.retrieveInputStream().thenAccept(is -> {
-            channel.sendMessage(theirPrivateData(event.getUser(), loginName, studentID, attachment.getFileExtension())).addFile(is, "card." + attachment.getFileExtension()).queue(m -> {
+            channel.sendMessageEmbeds(theirPrivateData(event.getUser(), loginName, studentID, attachment.getFileExtension()))
+                    .addFiles(FileUpload.fromData(is, "card." + attachment.getFileExtension()))
+                    .queue(m -> {
                 Database.STUDENT_VERIFICATION.addStudent(studentID, loginName, System.currentTimeMillis(),
                         event.getUser().getIdLong(), m.getIdLong());
-                event.getUser().openPrivateChannel().queue(c -> c.sendMessage(sentYourPrivateData()).queue(vrfy -> {
-                    m.addReaction("✅").queue();
-                    m.addReaction("❌").queue();
+                event.getUser().openPrivateChannel().queue(c -> c.sendMessageEmbeds(sentYourPrivateData()).queue(vrfy -> {
+                    m.addReaction(Emoji.fromUnicode("✅")).queue();
+                    m.addReaction(Emoji.fromUnicode("❌")).queue();
                 }));
             });
         });
@@ -267,61 +266,59 @@ public class Register extends Command implements EventListener {
             });
             return;
         }
-        if (!(genericEvent instanceof GuildMessageReactionAddEvent)){
-            if (genericEvent instanceof PrivateMessageReceivedEvent){
-                PrivateMessageReceivedEvent event = (PrivateMessageReceivedEvent) genericEvent;
-                if (event.getMessage().getAttachments().size() > 0 && event.getMessage().getContentRaw().isBlank()){
+        if (!(genericEvent instanceof MessageReactionAddEvent reactionAddEvent)){
+            if (genericEvent instanceof MessageReceivedEvent event){
+                if (!event.getMessage().getAttachments().isEmpty() && event.getMessage().getContentRaw().isBlank()){
                     event.getAuthor().openPrivateChannel().queue(ch -> {
-                        ch.sendMessage(missingCommand()).queue();
+                        ch.sendMessageEmbeds(missingCommand()).queue();
                     });
                     return;
                 }
             }
             return;
         }
-        GuildMessageReactionAddEvent event = (GuildMessageReactionAddEvent) genericEvent;
-        if (event.getChannel().getIdLong() != CHANNEL_ID){
+        if (reactionAddEvent.getChannel().getIdLong() != CHANNEL_ID){
             return;
         }
-        if (event.getUser().isBot()) return;
+        if (reactionAddEvent.getUser().isBot()) return;
 
-        long messageID = event.getMessageIdLong();
-        if (event.getReactionEmote().getName().equals("✅")){
+        long messageID = reactionAddEvent.getMessageIdLong();
+        if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("✅"))){
             Database.STUDENT_VERIFICATION.validateStudent(System.currentTimeMillis(), messageID, studentID -> {
-                event.getGuild().addRoleToMember(studentID, event.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
-                event.getGuild().addRoleToMember(studentID, event.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
+                reactionAddEvent.getGuild().addRoleToMember(UserSnowflake.fromId(studentID), reactionAddEvent.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
+                reactionAddEvent.getGuild().addRoleToMember(UserSnowflake.fromId(studentID), reactionAddEvent.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
                 // also give them the server_member role
-                event.getChannel().retrieveMessageById(messageID).queue(msg -> {
+                reactionAddEvent.getChannel().retrieveMessageById(messageID).queue(msg -> {
                     EmbedBuilder bld = new EmbedBuilder(msg.getEmbeds().get(0));
                     bld.setTitle("Approved Member");
                     bld.setDescription(null);
                     bld.setColor(0x00ff00);
-                    bld.setFooter("Verified by: " + event.getUser().getAsTag());
+                    bld.setFooter("Verified by: " + reactionAddEvent.getUser().getAsTag());
                     bld.setImage(null);
-                    msg.editMessage(bld.build()).override(true).queue();
+                    msg.editMessageEmbeds(bld.build()).queue();
                     msg.clearReactions().queue();
 //                    msg.addReaction("↩").queue();
 //                    msg.addReaction("🔄").queue();
                     msg.getJDA().openPrivateChannelById(studentID).queue(ch -> {
-                        ch.sendMessage(privateDataAccepted()).queue();
+                        ch.sendMessageEmbeds(privateDataAccepted()).queue();
                     });
                 });
             });
-        } else if (event.getReactionEmote().getName().equals("❌")){
+        } else if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("❌"))){
             Database.STUDENT_VERIFICATION.invalidateStudent(System.currentTimeMillis(), messageID, studentID -> {
-                event.getChannel().retrieveMessageById(messageID).queue(msg -> {
+                reactionAddEvent.getChannel().retrieveMessageById(messageID).queue(msg -> {
                     EmbedBuilder bld = new EmbedBuilder(msg.getEmbeds().get(0));
                     bld.setTitle("Denied Member");
                     bld.setDescription(null);
                     bld.setColor(0xff0000);
-                    bld.setFooter("Denied by: " + event.getUser().getAsTag());
+                    bld.setFooter("Denied by: " + reactionAddEvent.getUser().getAsTag());
                     bld.setImage(null);
-                    msg.editMessage(bld.build()).override(true).queue();
+                    msg.editMessageEmbeds(bld.build()).queue();
                     msg.clearReactions().queue();
 //                    msg.addReaction("↩").queue();
 //                    msg.addReaction("🔄").queue();
                     msg.getJDA().openPrivateChannelById(studentID).queue(ch -> {
-                        ch.sendMessage(privateDataDenied()).queue();
+                        ch.sendMessageEmbeds(privateDataDenied()).queue();
                     });
                 });
             });

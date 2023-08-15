@@ -52,7 +52,7 @@ public class StudentVerification {
             "select student_verified from student_verification where student_discord_snowflake = ? order by student_pk desc limit 1;";
 
     private final static String FIND_DISCORD_IDS_MATCHING_SU_ID =
-            "select student_discord_snowflake from student_verification where student_id in ?;";
+            "select student_discord_snowflake from student_verification where student_id = any (?);";
 
     private HikariDataSource source;
 
@@ -247,7 +247,7 @@ public class StudentVerification {
     public List<Long> findStudentsWithSUIds(String[] suIDs){
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(FIND_DISCORD_IDS_MATCHING_SU_ID)) {
-            statement.setArray(1, connection.createArrayOf("text[]", suIDs));
+            statement.setArray(1, connection.createArrayOf("text", suIDs));
 
             ResultSet set = statement.executeQuery();
             List<Long> found = new ArrayList<>();

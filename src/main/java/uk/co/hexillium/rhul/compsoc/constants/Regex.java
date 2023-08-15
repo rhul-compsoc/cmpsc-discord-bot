@@ -12,7 +12,7 @@ public class Regex {
 
     public static final Pattern USER_TAG = User.USER_TAG;
     public static final Pattern USER_MENTION = Message.MentionType.USER.getPattern();
-    public static final Pattern EMOTE_MENTION = Message.MentionType.EMOTE.getPattern();
+    public static final Pattern EMOTE_MENTION = Message.MentionType.EMOJI.getPattern();
     public static final Pattern CHANNEL_MENTION = Message.MentionType.CHANNEL.getPattern();
     public static final Pattern ROLE_MENTION = Message.MentionType.ROLE.getPattern();
 

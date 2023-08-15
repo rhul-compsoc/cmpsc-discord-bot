@@ -2,7 +2,7 @@ package uk.co.hexillium.rhul.compsoc.chat;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.GenericEvent;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -31,9 +31,8 @@ public class ChatXP implements EventListener {
 
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
-        if (!(genericEvent instanceof GuildMessageReceivedEvent)) return;
-        GuildMessageReceivedEvent event = (GuildMessageReceivedEvent) genericEvent;
-
+        if (!(genericEvent instanceof MessageReceivedEvent event)) return;
+        if (!event.isFromGuild()) return;
         if (event.getMember() == null) return;
         if (event.getAuthor().isBot()) return;
         Database.runLater(() -> {

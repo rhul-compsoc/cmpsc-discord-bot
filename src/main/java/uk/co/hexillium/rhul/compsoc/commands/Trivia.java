@@ -3,19 +3,22 @@ package uk.co.hexillium.rhul.compsoc.commands;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.GenericEvent;
-import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.Button;
-import net.dv8tion.jda.api.interactions.components.ButtonStyle;
-import net.dv8tion.jda.api.utils.AttachmentOption;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.TimeUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -29,11 +32,12 @@ import org.jfree.data.time.Day;
 import org.jfree.data.time.TimeSeries;
 import org.jfree.data.time.TimeSeriesCollection;
 import org.jfree.chart.axis.ValueAxis;
-import org.jfree.data.time.Second;
 import org.jfree.chart.title.LegendTitle;
 import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.commands.challenges.*;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.ComponentInteractionHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.ScoreHistory;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.TriviaScore;
@@ -135,7 +139,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         jda.addEventListener(this);
     }
 
-    private void postChallenge(Challenge newQ, TextChannel tc) {
+    private void postChallenge(Challenge newQ, GuildMessageChannel tc) {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         try {
             ImageIO.write(newQ.getImage(), "png", os);
@@ -143,7 +147,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             LOGGER.error("Failed to send image", ex);
             return;
         }
-        tc.sendMessageEmbeds(askQuestion(newQ)).setActionRows(getBooleanActionRow(newQ)).addFile(os.toByteArray(), "image.png").queue(msg -> {
+        tc.sendMessageEmbeds(askQuestion(newQ)).setComponents(getBooleanActionRow(newQ)).addFiles(FileUpload.fromData(os.toByteArray(), "image.png")).queue(msg -> {
             lock.lock();
             try {
                 makeSpace(tc);
@@ -160,16 +164,16 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         String prefix = buttonPrefix[0] + "|l|" + season + "|";
         Button first = Button.of(ButtonStyle.PRIMARY,
                 prefix + "f|" + "0",
-                Emoji.fromMarkdown("⏮"));
+                Emoji.fromUnicode("⏮"));
         Button previous = Button.of(ButtonStyle.PRIMARY,
                 prefix + "p|" + Math.max(currentPos - 1, 0),
-                Emoji.fromMarkdown("◀"));
+                Emoji.fromUnicode("◀"));
         Button next = Button.of(ButtonStyle.PRIMARY,
                 prefix + "n|" + Math.min(currentPos + 1, maxPos),
-                Emoji.fromMarkdown("▶"));
+                Emoji.fromUnicode("▶"));
         Button last = Button.of(ButtonStyle.PRIMARY,
                 prefix + "l|" + maxPos,
-                Emoji.fromMarkdown("⏭"));
+                Emoji.fromUnicode("⏭"));
 
         return ActionRow.of(
                 currentPos == 0 ? first.asDisabled() : first,
@@ -194,7 +198,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     }
 
     @Override
-    public void handleButtonInteraction(ButtonClickEvent interaction, String data) {
+    public void handleButtonInteraction(ButtonInteractionEvent interaction, String data) {
         char type = data.charAt(0);
         //leave cases for things like pagination and such here.
         switch (type) {
@@ -207,7 +211,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                     return;
                 }
                 answerQuestion(data.substring(1, 2),  //either 't' or 'f'
-                        interaction.getUser(), interaction.getTextChannel(),
+                        interaction.getUser(), interaction.getChannel().asGuildMessageChannel(),
                         err -> interaction.reply(err).setEphemeral(true).queue());
                 break;
             case 'p': {
@@ -217,7 +221,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 int pageNum = Integer.parseInt(data.split("\\|", 2)[1]);
                 int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers(0) / 10.0) - 1);
                 interaction.editMessageEmbeds(sendScoreboardInfo(pageNum, interaction.getUser().getIdLong(), maxPos, 0))
-                        .setActionRows(getPaginationActionRow(maxPos, pageNum, 0))
+                        .setComponents(getPaginationActionRow(maxPos, pageNum, 0))
                         .queue();
                 break;
             }
@@ -230,7 +234,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 int pageNum = Integer.parseInt(inputs[3]);
                 int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers(seasonNum) / 10.0) - 1);
                 interaction.editMessageEmbeds(sendScoreboardInfo(pageNum, interaction.getUser().getIdLong(), maxPos, seasonNum))
-                        .setActionRows(getPaginationActionRow(maxPos, pageNum, seasonNum))
+                        .setComponents(getPaginationActionRow(maxPos, pageNum, seasonNum))
                         .queue();
                 break;
             }
@@ -245,9 +249,8 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
 
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
-        if (genericEvent instanceof GuildMessageReceivedEvent) {
-
-            GuildMessageReceivedEvent event = (GuildMessageReceivedEvent) genericEvent;
+        if (genericEvent instanceof MessageReceivedEvent event) {
+            if (!event.isFromGuild()) return;
             if (event.getChannel().getIdLong() == channelID) {
                 if (event.getMember() == null) return;
                 if (event.getMember().getIdLong() == 187979032904728576L) {
@@ -258,6 +261,19 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                             recentMessageSpawnID = event.getMessageIdLong();
                             Challenge question = getChallengeForId(Integer.parseInt(args[1]));
                             postChallenge(question, event.getJDA().getTextChannelById(channelID));
+                        });
+                    } else if (event.getMessage().getContentRaw().startsWith("!drawallscores")){
+                        Database.runLater(() -> {
+                            ScoreHistory[] scores = Database.TRIVIA_STORAGE.fetchScoreHistoryForAllUsers(CURRENT_SEASON_NUMBER, event.getMessage().getGuild().getIdLong());
+                            BufferedImage image = drawChart(scores, 1500, 1000);
+                            ByteArrayOutputStream os = new ByteArrayOutputStream();
+                            try {
+                                ImageIO.write(image, "png", os);
+                            } catch (IOException ex) {
+                                LOGGER.error("Failed to send image", ex);
+                                return;
+                            }
+                            event.getChannel().sendFiles(FileUpload.fromData(os.toByteArray(), "image.png")).queue();
                         });
                     }
                 }
@@ -282,7 +298,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             // we can spawn one in!
             // let's have a 2/22 chance of that happening
             if (randInclusive(1, 22) > 2) return;
-            TextChannel target = event.getJDA().getTextChannelById(channelID);
+            GuildMessageChannel target = event.getJDA().getTextChannelById(channelID);
             if (target == null) {
                 LOGGER.error("Failed to find textchannel. Aborting");
                 return;
@@ -312,15 +328,15 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         return getBoolAlgebra();
     }
 
-    private void makeSpace(TextChannel channel) {
+    private void makeSpace(GuildMessageChannel channel) {
         if (currentQuestion == null) return;
-        channel.editMessageEmbedsById(recentSentMessageID, nobodyIsHere()).setActionRows(Collections.emptyList()).queue();
+        channel.editMessageEmbedsById(recentSentMessageID, nobodyIsHere()).setComponents(Collections.emptyList()).queue();
         currentQuestion = null;
     }
 
     @Override
     public void handleCommand(CommandEvent event) {
-        if (event.getTextChannel().getIdLong() != channelID && event.getAuthor().getIdLong() != 187979032904728576L) {
+        if (event.getGuildMessageChannel().getIdLong() != channelID && event.getAuthor().getIdLong() != 187979032904728576L) {
             event.reply("This isn't the right channel :/");
             return;
         }
@@ -338,9 +354,9 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             Database.runLater(() -> { //don't run on the WS thread
                 int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers(CURRENT_SEASON_NUMBER) / 10.0) - 1);
                 int finalPosition = Math.max(0, Math.min(maxPos, scorePageFinal));
-                event.getTextChannel()
+                event.getGuildMessageChannel()
                         .sendMessageEmbeds(sendScoreboardInfo(finalPosition, event.getAuthor().getIdLong(), maxPos, CURRENT_SEASON_NUMBER))
-                        .setActionRows(getPaginationActionRow(maxPos, finalPosition, CURRENT_SEASON_NUMBER))
+                        .setComponents(getPaginationActionRow(maxPos, finalPosition, CURRENT_SEASON_NUMBER))
                         .queue();
             });
             return;
@@ -399,11 +415,11 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                             LOGGER.error("Failed to send image", ex);
                             return;
                         }
-                        event.getTextChannel().sendFile(os.toByteArray(), "solution.png", AttachmentOption.SPOILER)
+                        event.getGuildMessageChannel().sendFiles(FileUpload.fromData(os.toByteArray(), "SPOILER_solution.png"))
                                 .setEmbeds(builder.build())
                                 .queue();
                     } else {
-                        event.getTextChannel().sendMessageEmbeds(builder.build())
+                        event.getGuildMessageChannel().sendMessageEmbeds(builder.build())
                                 .queue();
                     }
                 });
@@ -436,7 +452,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             event.reply("That was not a valid answer.");
             return;
         }
-        answerQuestion(answer, event.getUser(), event.getTextChannel(), event::reply);
+        answerQuestion(answer, event.getUser(), event.getGuildMessageChannel(), event::reply);
         event.getMessage().delete().queue();
     }
 
@@ -449,7 +465,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         return getScores(userScore, scores, finalPosition, maxPages + 1, seasonNum);
     }
 
-    private synchronized void answerQuestion(String answer, User user, TextChannel channel, Consumer<String> error) {
+    private synchronized void answerQuestion(String answer, User user, GuildMessageChannel channel, Consumer<String> error) {
 
         lock.lock();
         //we're going into question-got-answered mode
@@ -479,7 +495,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         return eb.build();
     }
 
-    private void updateMessage(Challenge question, boolean correct, User user, long messageID, TextChannel textChannel) {
+    private void updateMessage(Challenge question, boolean correct, User user, long messageID, GuildMessageChannel textChannel) {
         EmbedBuilder builder = new EmbedBuilder();
         builder.setColor(correct ? 0x20e035 : 0xe02035);
         builder.setTitle((correct ? "Correct! " : "Incorrect! "));
@@ -490,7 +506,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 "||`" + question.getSolution() + "`||", false);
         builder.setImage("attachment://image.png");
 //        builder.setAuthor(user.getAsTag());
-        textChannel.editMessageEmbedsById(messageID, builder.build()).setActionRows(Collections.emptyList())/*.override(true)*/.queue();
+        textChannel.editMessageEmbedsById(messageID, builder.build()).setComponents(Collections.emptyList())/*.override(true)*/.queue();
     }
 
     private MessageEmbed askQuestion(Challenge question) {
@@ -659,11 +675,11 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     public List<CommandData> registerGlobalCommands() {
         List<CommandData> commands = new ArrayList<>();
         commands.add(
-                new CommandData("leaderboard", "Show the leaderboard")
+                Commands.slash("leaderboard", "Show the leaderboard")
                         .addOption(OptionType.INTEGER, "page", "Page number", false)
                         .addOption(OptionType.INTEGER, "season", "Season number", false));
         commands.add(
-                new CommandData("scorehistory", "Show your score history")
+                Commands.slash("scorehistory", "Show your score history")
                         .addOption(OptionType.USER, "primaryuser", "The primary user to graph", true)
                         .addOption(OptionType.INTEGER, "season", "The season to track. Defaults to the current season.", false)
                         .addOption(OptionType.USER, "otheruser-0", "Another user to compare to", false)
@@ -676,7 +692,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     }
 
     @Override
-    public void handleSlashCommand(SlashCommandEvent event) {
+    public void handleSlashCommand(SlashCommandInteractionEvent event) {
         if (event.getName().equals("leaderboard")) {
             if (event.getChannel().getIdLong() != channelID) {
                 event.reply("This isn't the correct channel for this!  Please use <#" + channelID + "> to view the leaderboard.")
@@ -696,7 +712,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 int maxPos = (int) (Math.ceil(Database.TRIVIA_STORAGE.fetchTotalDatabaseMembers(effectiveSeason) / 10.0) - 1);
                 int finalPosition = Math.max(0, Math.min(maxPos, pageNumber - 1));
                 event.replyEmbeds(sendScoreboardInfo(finalPosition, event.getUser().getIdLong(), maxPos, effectiveSeason))
-                        .addActionRows(getPaginationActionRow(maxPos, finalPosition, effectiveSeason))
+                        .addComponents(getPaginationActionRow(maxPos, finalPosition, effectiveSeason))
                         .setEphemeral(false)
                         .queue();
             });
@@ -753,7 +769,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             LOGGER.error("Failed to send image", ex);
             return;
         }
-        hook.sendFile(os.toByteArray(), "chart.png").queue();
+        hook.sendFiles(FileUpload.fromData(os.toByteArray(), "chart.png")).queue();
     }
 
     private BufferedImage drawChart(ScoreHistory[] scores, int width, int height){

@@ -2,11 +2,12 @@ package uk.co.hexillium.rhul.compsoc.handlers;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Member;
-import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.events.GenericEvent;
-import net.dv8tion.jda.api.events.channel.text.TextChannelCreateEvent;
-import net.dv8tion.jda.api.events.channel.text.update.TextChannelUpdateNameEvent;
+import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
+import net.dv8tion.jda.api.events.channel.update.ChannelUpdateNameEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.guild.member.update.GuildMemberUpdateNicknameEvent;
 import net.dv8tion.jda.api.events.user.update.GenericUserUpdateEvent;
@@ -31,11 +32,13 @@ public class InformationUpdateHandler implements EventListener {
         if (genericEvent instanceof GuildMemberUpdateNicknameEvent){
             update(((GuildMemberUpdateNicknameEvent) genericEvent).getMember());
         }
-        if (genericEvent instanceof TextChannelUpdateNameEvent){
-            updateChannelName(((TextChannelUpdateNameEvent) genericEvent).getChannel());
+        if (genericEvent instanceof ChannelUpdateNameEvent event){
+            if (event.getChannel() instanceof GuildMessageChannel channel)
+                updateChannelName(channel);
         }
-        if (genericEvent instanceof TextChannelCreateEvent){
-            insertChannel(((TextChannelCreateEvent) genericEvent).getChannel());
+        if (genericEvent instanceof ChannelCreateEvent event){
+            if (event.getChannel() instanceof GuildMessageChannel channel)
+                insertChannel(channel);
         }
         if (genericEvent instanceof GenericUserUpdateEvent){
             update(((GenericUserUpdateEvent<?>) genericEvent).getUser());
@@ -56,15 +59,15 @@ public class InformationUpdateHandler implements EventListener {
         });
     }
 
-    private void updateChannelName(TextChannel tc) {
+    private void updateChannelName(GuildMessageChannel channel) {
         Database.runLater(() -> {
-            Database.MESSAGE_STORAGE.updateChannel(tc);
+            Database.MESSAGE_STORAGE.updateChannel(channel);
         });
     }
 
-    private void insertChannel(TextChannel tc) {
+    private void insertChannel(GuildMessageChannel channel) {
         Database.runLater(() -> {
-            Database.MESSAGE_STORAGE.insertChannel(tc);
+            Database.MESSAGE_STORAGE.insertChannel(channel);
         });
     }
 

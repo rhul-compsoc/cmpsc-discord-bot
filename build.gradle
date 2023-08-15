@@ -1,11 +1,12 @@
 plugins {
     id 'java'
     id 'application'
-    id 'com.github.johnrengelman.shadow' version '6.1.0'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
-
-mainClassName = 'uk.co.hexillium.rhul.compsoc.Bot'
+application{
+    mainClassName = 'uk.co.hexillium.rhul.compsoc.Bot'
+}
 
 group 'uk.co.hexillium.rhul'
 version '1.0'
@@ -33,8 +34,9 @@ tasks.withType(JavaCompile) {
 
 dependencies {
     // https://mvnrepository.com/artifact/com.sparkjava/spark-core
-    implementation group: 'com.sparkjava', name: 'spark-core', version: '2.9.3'
-    implementation 'net.dv8tion:JDA:4.4.0_352'
+    implementation group: 'com.sparkjava', name: 'spark-core', version: '2.9.4'
+    implementation 'net.dv8tion:JDA:5.0.0-beta.13'
+    implementation 'com.google.code.findbugs:jsr305:3.0.2'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.1'
     // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core
     implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.17.1'
@@ -45,6 +47,17 @@ dependencies {
     // https://mvnrepository.com/artifact/io.github.classgraph/classgraph
     implementation group: 'io.github.classgraph', name: 'classgraph', version: '4.8.114'
     implementation 'com.zaxxer:HikariCP:5.0.1'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.2.1'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+
+    //for graphing the score histories
     implementation 'org.jfree:jfreechart:1.5.3'
+
+    //for the regex challenges, to verify the solution works, or the red herring doesn't work
+    implementation 'com.google.re2j:re2j:1.6'
+
+    //to send mail
+    //i think
+    implementation 'org.eclipse.angus:angus-mail:2.0.1'
 }
+sourceCompatibility = JavaVersion.VERSION_16
+targetCompatibility = JavaVersion.VERSION_16

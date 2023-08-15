@@ -2,7 +2,9 @@ package uk.co.hexillium.rhul.compsoc.persistence;
 
 import com.zaxxer.hikari.HikariDataSource;
 import net.dv8tion.jda.api.entities.Message;
-import net.dv8tion.jda.api.entities.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -38,13 +40,13 @@ public class MessageStorage {
         this.source = source;
     }
 
-    public void insertChannel(TextChannel channel){
+    public void insertChannel(GuildMessageChannel channel){
         try (Connection conn = source.getConnection()){
             PreparedStatement ps = conn.prepareStatement(insertChannel);
             ps.setLong(1, channel.getIdLong());
             ps.setString(2, channel.getName());
             ps.setLong(3, 0);
-            ps.setString(4, channel.getTopic());
+            ps.setString(4, "");
 
             ps.executeUpdate();
         } catch (SQLException ex){
@@ -52,11 +54,11 @@ public class MessageStorage {
         }
     }
 
-    public void updateChannel(TextChannel tc){
+    public void updateChannel(GuildMessageChannel channel){
         try (Connection conn = source.getConnection()){
             PreparedStatement ps = conn.prepareStatement(updateChannel);
-            ps.setString(1, tc.getName());
-            ps.setLong(2, tc.getIdLong());
+            ps.setString(1, channel.getName());
+            ps.setLong(2, channel.getIdLong());
 
             ps.executeUpdate();
         } catch (SQLException ex){

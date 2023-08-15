@@ -3,8 +3,11 @@ package uk.co.hexillium.rhul.compsoc;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
+import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
 
 import javax.annotation.Nonnull;
@@ -16,11 +19,10 @@ import java.util.function.Consumer;
 
 public class CommandEvent {
 
-    TextChannel textChannel;
+    GuildMessageChannel textChannel;
     PrivateChannel privateChannel;
 
-    GuildMessageReceivedEvent guildEvent;
-    PrivateMessageReceivedEvent privateMEvent;
+    MessageReceivedEvent messageReceivedEvent;
 
     Message message;
 
@@ -34,20 +36,16 @@ public class CommandEvent {
 
     boolean isGuildMessage;
 
-    public CommandEvent(PrivateMessageReceivedEvent event) {
-        isGuildMessage = false;
-        privateChannel = event.getChannel();
+    public CommandEvent(MessageReceivedEvent event) {
+        isGuildMessage = event.isFromGuild();
+        this.messageReceivedEvent = event;
+        if (isGuildMessage){
+            privateChannel = event.getChannel().asPrivateChannel();
+        } else {
+            textChannel = event.getChannel().asGuildMessageChannel();
+        }
         common(event.getMessage().getContentRaw(), CommandDispatcher.defaultCommandDelimiter);
-        privateMEvent = event;
         this.message = event.getMessage();
-    }
-
-    public CommandEvent(GuildMessageReceivedEvent event, GuildSettings settings) {
-        isGuildMessage = true;
-        textChannel = event.getChannel();
-        common(event.getMessage().getContentRaw(), settings.getPrefix());
-        this.message = event.getMessage();
-        this.guildEvent = event;
     }
 
     /**
@@ -82,7 +80,7 @@ public class CommandEvent {
      * @throws IllegalStateException iff this command was not run from a guild
      */
     @Nonnull
-    public TextChannel getTextChannel() {
+    public GuildMessageChannel getGuildMessageChannel() {
         if (!isGuildMessage()) throw new IllegalStateException("Not a guild channel.");
         return textChannel;
     }
@@ -110,27 +108,12 @@ public class CommandEvent {
     }
 
     /**
-     * Gets the raw GuildMessageReceivedEvent. Will throw iff run from a DM
+     * Gets the raw MessageReceivedEvent.
      *
      * @return the raw GuildMessageReceivedEvent.
-     * @throws IllegalStateException iff the command was not run from a guild
      */
-    @Nonnull
-    public GuildMessageReceivedEvent getGuildEvent() {
-        if (!isGuildMessage()) throw new IllegalStateException("Not a guild message.");
-        return guildEvent;
-    }
-
-    /**
-     * Gets the raw PrivateMessageReceivedEvent. Will throw iff run from a guild
-     *
-     * @return the raw PrivateMessageReceivedEvent.
-     * @throws IllegalStateException iff run from a guild.
-     */
-    @Nonnull
-    public PrivateMessageReceivedEvent getPrivateMEvent() {
-        if (isGuildMessage()) throw new IllegalStateException("Not a private message");
-        return privateMEvent;
+    public MessageReceivedEvent getEvent(){
+        return messageReceivedEvent;
     }
 
     /**
@@ -203,7 +186,7 @@ public class CommandEvent {
     @Nonnull
     public Guild getGuild() {
         if (!isGuildMessage()) throw new IllegalStateException("Not run from a guild");
-        return guildEvent.getGuild();
+        return messageReceivedEvent.getGuild();
     }
 
     /**
@@ -213,7 +196,7 @@ public class CommandEvent {
      */
     @Nonnull
     public User getUser() {
-        return isGuildMessage ? guildEvent.getAuthor() : privateMEvent.getAuthor();
+        return messageReceivedEvent.getAuthor();
     }
 
     /**
@@ -235,7 +218,7 @@ public class CommandEvent {
      */
     @Nullable
     public Member getMember() {
-        return guildEvent.getMember();
+        return messageReceivedEvent.getMember();
     }
 
     /**
@@ -256,7 +239,7 @@ public class CommandEvent {
     @Nonnull
     public Member getSelfMember(){
         if (!isGuildMessage()) throw new IllegalStateException("Not a guild event.");
-        return guildEvent.getGuild().getSelfMember();
+        return messageReceivedEvent.getGuild().getSelfMember();
     }
 
     /**
@@ -284,7 +267,7 @@ public class CommandEvent {
         for (MessageEmbed.Field f : fields){
             eb.addField(f);
         }
-        this.getChannel().sendMessage(eb.build()).queue();
+        this.getChannel().sendMessageEmbeds(eb.build()).queue();
     }
 
     /**
@@ -293,7 +276,7 @@ public class CommandEvent {
      * @param embed the embed to send
      */
     public void reply(@Nonnull MessageEmbed embed) {
-        sendMessage(getChannel(), embed, null, null);
+        getChannel().sendMessageEmbeds(embed).queue();
     }
 
     /**
@@ -303,25 +286,6 @@ public class CommandEvent {
      */
     public void reply(@Nonnull String message) {
         sendSplitMessage(getChannel(), message, null, null);
-    }
-
-    /**
-     * Sends a {@link Message} reply to the channel
-     *
-     * @param message the message to send
-     */
-    public void reply(@Nonnull Message message) {
-        sendMessage(getChannel(), message, null, null);
-    }
-
-    /**
-     * Sends a {@link MessageEmbed} reply to the channel, with a success consumer
-     *
-     * @param embed   the embed to send
-     * @param success the success consumer
-     */
-    public void reply(@Nonnull MessageEmbed embed, @Nullable Consumer<? super Message> success) {
-        sendMessage(getChannel(), embed, success, null);
     }
 
     /**
@@ -347,27 +311,6 @@ public class CommandEvent {
     }
 
     /**
-     * Sends a String and {@link MessageEmbed} reply to the origin channel, with a success consumer.
-     * This method will <b>not</b> split the message up if it is too long
-     *
-     * @param message the string to send
-     * @param success the success consumer, which will run when all messages completed
-     */
-    public void reply(@Nonnull String message, @Nonnull MessageEmbed embed, Consumer<? super Message> success) {
-        sendMessage(getChannel(), message, embed, success, null);
-    }
-
-    /**
-     * Sends a String and {@link MessageEmbed} reply to the origin channel.
-     * This method will <b>not</b> split the message up if it is too long
-     *
-     * @param message the string to send
-     */
-    public void reply(@Nonnull String message, @Nonnull MessageEmbed embed) {
-        sendMessage(getChannel(), message, embed, null, null);
-    }
-
-    /**
      * Adds a reaction to the origin message.  Can be in unicode format,
      * or {@literal <a?:.+:\d+>} format, or {@literal .+:\d+}.
      *
@@ -376,30 +319,7 @@ public class CommandEvent {
     public void react(@Nullable String reaction) {
         if (reaction == null || reaction.isEmpty())
             return;
-        getMessage().addReaction(reaction.replaceAll("<a?:(.+):(\\d+)>", "$1:$2")).queue();
-    }
-
-    /**
-     * Sends a {@link Message} reply to the origin channel, with a success consumer.
-     *
-     * @param message the string to send
-     * @param success the success consumer, which will run when the message is sent
-     */
-    public void reply(Message message, Consumer<? super Message> success) {
-        sendMessage(getChannel(), message, success, null);
-    }
-
-
-    /**
-     * Sends a {@link Message} reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, Message message, Consumer<? super Message> success, Consumer<? super Throwable> failure) {
-        channel.sendMessage(message).queue(success, failure);
+        getMessage().addReaction(Emoji.fromFormatted(reaction)).queue();
     }
 
     /**
@@ -437,85 +357,6 @@ public class CommandEvent {
     }
 
     /**
-     * Sends a {@link MessageEmbed} reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param embed   the embed to send
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, MessageEmbed embed, Consumer<? super Message> success, Consumer<? super Throwable> failure) {
-        channel.sendMessage(embed).queue(success, failure);
-    }
-
-    /**
-     * Sends a String + embed reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param embed the embed to send
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, String message, MessageEmbed embed, Consumer<? super Message> success, Consumer<? super Throwable> failure) {
-        channel.sendMessage(message).embed(embed).queue(success, failure);
-    }
-
-    /**
-     * Sends a String + embed reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param embed the embed to send
-     * @param mentions the IMentionables which may be mentioned
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, String message, MessageEmbed embed, Collection<IMentionable> mentions, Consumer<? super Message> success, Consumer<? super Throwable> failure) {
-        channel.sendMessage(message).embed(embed).mention(mentions).queue(success, failure);
-    }
-
-    /**
-     * Sends a String + embed reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param embed the embed to send
-     * @param mentionTypes the IMentionable types which may be mentioned (ie, role/user)
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, String message, MessageEmbed embed, Consumer<? super Message> success, Consumer<? super Throwable> failure, Collection<Message.MentionType> mentionTypes) {
-        channel.sendMessage(message).embed(embed).allowedMentions(mentionTypes).queue(success, failure);
-    }
-
-    /**
-     * Sends a String reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param mentions the IMentionables which may be mentioned
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, String message, Collection<IMentionable> mentions, Consumer<? super Message> success, Consumer<? super Throwable> failure) {
-        channel.sendMessage(message).mention(mentions).queue(success, failure);
-    }
-
-    /**
-     * Sends a String reply to the channel, with a success and failure consumer.
-     *
-     * @param channel the channel to which the message is sent
-     * @param message the string to send
-     * @param mentionTypes the IMentionable types which may be mentioned (ie, role/user)
-     * @param success the success consumer, which will run when the message send is completed
-     * @param failure the failure consumer, which will be called if the message fails to send.
-     */
-    public void sendMessage(MessageChannel channel, String message, Consumer<? super Message> success, Consumer<? super Throwable> failure, Collection<Message.MentionType> mentionTypes) {
-        channel.sendMessage(message).allowedMentions(mentionTypes).queue(success, failure);
-    }
-
-    /**
      * Reacts with the tick to the origin message
      */
     public void reactSuccess() {
@@ -537,12 +378,12 @@ public class CommandEvent {
     }
 
     private void react(Message message, int reactionID) {
-        message.addReaction(Bot.emojis[reactionID]).queue();
+        message.addReaction(Emoji.fromUnicode(Bot.emojis[reactionID])).queue();
     }
 
     @Override
     public String toString() {
-        return getUser().getName() + "#" + getUser().getDiscriminator() + " issued command `" + fullText + "` at " + HelperUtil.getDateAndTime() + ".";
+        return getUser().getName() + (getUser().getDiscriminator().equals("0000") ? "#" + getUser().getDiscriminator() : "") + " issued command `" + fullText + "` at " + HelperUtil.getDateAndTime() + ".";
     }
 
     /**

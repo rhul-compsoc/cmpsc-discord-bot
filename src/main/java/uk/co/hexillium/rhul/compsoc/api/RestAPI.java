@@ -3,6 +3,8 @@ package uk.co.hexillium.rhul.compsoc.api;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.*;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.exceptions.ParsingException;
 import net.dv8tion.jda.api.utils.data.DataArray;
 import net.dv8tion.jda.api.utils.data.DataObject;
@@ -150,10 +152,9 @@ public class RestAPI {
             for (GuildChannel channel : guild.getChannels()){
                 DataObject channelObj = DataObject.empty();
                 channelObj.put("name", channel.getName());
-                if (channel instanceof TextChannel) {
-                    channelObj.put("description", ((TextChannel) channel).getTopic());
+                if (channel instanceof TextChannel tc) {
+                    channelObj.put("description", tc.getTopic());
                 }
-                channelObj.put("pos", channel.getPosition());
                 channelObj.put("type", channel.getType().name());
                 channelObj.put("snowflake", channel.getId());
                 channels.add(channelObj);
@@ -181,11 +182,11 @@ public class RestAPI {
                     msgEmbeds.add(entityBuilder.createMessageEmbed(embedObj));
                 }
             } catch (ParsingException ignored){}
-            if (content.equals("") && msgEmbeds.isEmpty()){
+            if (content.isEmpty() && msgEmbeds.isEmpty()){
                 return "Error; no content specified.";
             }
             try {
-                if (!content.equals("")) {
+                if (!content.isEmpty()) {
                     channel.sendMessage(content).setEmbeds(msgEmbeds).queue();
                 } else {
                     channel.sendMessageEmbeds(msgEmbeds).queue();
@@ -403,6 +404,7 @@ public class RestAPI {
             membersRoleTarget.forEach(m -> m.getGuild().addRoleToMember(m, role).queue());
 
             String result = "Added role to " + membersRoleTarget.size() + " members, removed role from " + membersWithRole.size() + " members, and " + common.size() + " unchanged.";
+            logger.info("New: " + membersRoleTarget + ", Current: " + common + ", Expired: " + membersWithRole);
 
             logger.info(result);
 

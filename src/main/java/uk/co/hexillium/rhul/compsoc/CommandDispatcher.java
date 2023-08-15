@@ -4,18 +4,18 @@ import io.github.classgraph.ClassGraph;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.events.interaction.ButtonClickEvent;
-import net.dv8tion.jda.api.events.interaction.SelectionMenuEvent;
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent;
-import net.dv8tion.jda.api.events.message.priv.PrivateMessageReceivedEvent;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.GenericSelectMenuInteractionEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.requests.restaction.CommandListUpdateAction;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import uk.co.hexillium.rhul.compsoc.commands.Command;
-import uk.co.hexillium.rhul.compsoc.commands.ComponentInteractionHandler;
-import uk.co.hexillium.rhul.compsoc.commands.SlashCommandHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.ComponentInteractionHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.InteractionCommandHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
@@ -43,8 +43,9 @@ public class CommandDispatcher {
     private HashMap<String, Command> triggerMap;
     private HashMap<String, ComponentInteractionHandler> buttonMap;
     private List<ComponentInteractionHandler> buttons;
-    private List<SlashCommandHandler> slashCommands;
-    private HashMap<String, SlashCommandHandler> slashCommandMap;
+//    private List<SlashCommandHandler> slashCommands;
+    private List<InteractionCommandHandler> interactionCommandHandlers;
+    private HashMap<String, InteractionCommandHandler> slashCommandMap;
     private final HMAC hmac;
 
     public CommandDispatcher() throws NoSuchAlgorithmException {
@@ -54,14 +55,14 @@ public class CommandDispatcher {
         this.slashCommandMap = new HashMap<>();
 
         buttons = new ArrayList<>();
-        slashCommands = new ArrayList<>();
+        interactionCommandHandlers = new ArrayList<>();
 
 
         String pkg = "uk.co.hexillium.rhul.compsoc.commands";
         try (ScanResult scanResult =
                      new ClassGraph()
                              .enableClassInfo()
-                             .whitelistPackages(pkg)
+                             .acceptPackages(pkg)
                              .enableAnnotationInfo()
                              .scan()) {
             System.out.println(scanResult.getAllClasses().toString());
@@ -80,8 +81,8 @@ public class CommandDispatcher {
                         this.commands.add((Command) newInst);
                         logger.info("Adding Command Handler " + current.getName());
                     }
-                    if (newInst instanceof SlashCommandHandler){
-                        this.slashCommands.add((SlashCommandHandler) newInst);
+                    if (newInst instanceof InteractionCommandHandler){
+                        this.interactionCommandHandlers.add((SlashCommandHandler) newInst);
                         logger.info("Adding Slash Command Handler " + current.getName());
                     }
                     logger.info("Loaded " + routeClassInfo.loadClass().getName());
@@ -148,11 +149,11 @@ public class CommandDispatcher {
         }
         CommandListUpdateAction updateCmds = jda.getGuildById(500612695570120704L).updateCommands();
 //        CommandListUpdateAction updateCmds = jda.updateCommands();
-        for (SlashCommandHandler handler : slashCommands){
+        for (InteractionCommandHandler handler : interactionCommandHandlers){
             handler.initSlashCommandHandler(jda);
             List<CommandData> data = handler.registerGlobalCommands();
             updateCmds.addCommands(data);
-            for (CommandData cmd : data){
+            for (CommandData cmd : data) {
                 this.slashCommandMap.put(cmd.getName(), handler);
             }
         }
@@ -167,41 +168,38 @@ public class CommandDispatcher {
         scheduler.initialise();
     }
 
-    public void dispatchCommand(GuildMessageReceivedEvent event) {
-        if (event.getAuthor().isBot() || event.getMember() == null) return;
+    public void dispatchCommand(MessageReceivedEvent event){
+        if (event.getAuthor().isBot() || (event.isFromGuild() && event.getMember() == null) || event.isWebhookMessage()) return;
         String message = event.getMessage().getContentRaw();
-        fetchGuildData(event.getGuild().getIdLong(), settings -> {
-            String delim = settings == null ? defaultCommandDelimiter : settings.getPrefix();
-            if (message.startsWith(delim)) {
-                String[] args = message.split("\\s+");
-                String command = args[0].substring(defaultCommandDelimiter.length());
-                Command toRun = findCommand(command, true);
-                if (toRun == null) return;
-                logger.info("[guildid: " + event.getGuild().getIdLong() + "/user: " + event.getAuthor().getAsTag() + "] ran guild command " + command +  "=>" + toRun.getClass().getName() + " with args " + Arrays.toString(args));
-                CommandEvent cmdE = new CommandEvent(event, settings);
-                toRun.internalHandleCommand(cmdE);
-            }
-        });
+        if (!message.startsWith(defaultCommandDelimiter)) return;
 
+        String[] args = message.split("\\s+");
+        String command = args[0].substring(defaultCommandDelimiter.length());
+        logger.info("[{}] ran command {} with args {}.", event.getAuthor().getName(), command, args);
+        Database.runLater(() -> {
+            Command toRun = findCommand(command, event.isFromGuild());
+            if (toRun == null) return;
+            CommandEvent cmdE = new CommandEvent(event);
+            toRun.internalHandleCommand(cmdE);
+        });
     }
 
-    public void handleSlashCommand(SlashCommandEvent event){
+    public void handleSlashCommand(SlashCommandInteractionEvent event){
         String key = event.getName();
-        SlashCommandHandler handler = slashCommandMap.get(key);
+        InteractionCommandHandler handler = slashCommandMap.get(key);
         if (handler == null){
             logger.error("Unregistered command ID: " + event.getCommandId() + ", tag: " + event.getName() + " " + event);
             return;
         }
-        logger.info("Member " + event.getMember() + " executed " + handler.getClass().getName() + " slash command " + event.getCommandPath());
+        logger.info("Member " + event.getMember() + " executed " + handler.getClass().getName() + " slash command " + event.getCommandString());
         Database.runLater(() -> {
             try {
-                handler.handleSlashCommand(event);
+                handler.handleCommand(event);
             } catch (Exception ex){
                 logger.error("Failed to execute slash command ", ex);
             }
         });
     }
-
     private void fetchGuildData(long guildID, Consumer<GuildSettings> settings){
         if (Database.GUILD_DATA == null || true){ //todo
             Database.runLater(() -> {
@@ -222,20 +220,6 @@ public class CommandDispatcher {
         return commands.stream().filter(c -> guildCommand || !c.requireGuild()).filter(c -> Stream.of(c.getCommands()).anyMatch(trigger::equalsIgnoreCase)).collect(Collectors.toList());
     }
 
-    public void dispatchCommand(PrivateMessageReceivedEvent event) {
-        String message = event.getMessage().getContentRaw();
-        if (!message.startsWith(defaultCommandDelimiter)) return;
-        String[] args = message.split("\\s+");
-        String command = args[0].substring(defaultCommandDelimiter.length());
-        Database.runLater(() -> {
-            Command toRun = findCommand(command, false);
-            if (toRun == null) return;
-            logger.info("[DMs/user: " + event.getAuthor().getAsTag() + "] ran private command " + command + " with args " + Arrays.toString(args));
-            CommandEvent cmdE = new CommandEvent(event);
-            toRun.internalHandleCommand(cmdE);
-        });
-
-    }
 
     public boolean isCommand(String cmd) {
         return commands.stream().anyMatch(c -> Arrays.stream(c.getCommands()).anyMatch(cmd::equalsIgnoreCase));
@@ -250,7 +234,7 @@ public class CommandDispatcher {
     }
 
 
-    public void dispatchButtonPress(ButtonClickEvent event) {
+    public void dispatchButtonPress(ButtonInteractionEvent event) {
         //perform HMAC check:
         //HMAC is no longer needed...
 //        String comp = event.getComponentId();
@@ -277,7 +261,7 @@ public class CommandDispatcher {
         });
     }
 
-    public void dispatchSelectionMenu(SelectionMenuEvent event){
+    public void dispatchSelectionMenu(GenericSelectMenuInteractionEvent<?, ?> event){
         String[] components = event.getComponentId().split("\\|", 2);
         ComponentInteractionHandler handler = buttonMap.get(components[0]);
         logger.info("User " + event.getUser() + " dispatched " + handler.getClass().getName() + " with selectionMenu interaction + " + event.getComponentId());

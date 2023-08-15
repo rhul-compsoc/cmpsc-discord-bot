@@ -8,6 +8,8 @@ import uk.co.hexillium.rhul.compsoc.CommandDispatcher;
 import uk.co.hexillium.rhul.compsoc.CommandEvent;
 import uk.co.hexillium.rhul.compsoc.Disabled;
 
+import java.util.Arrays;
+
 @Disabled
 public class TestCommand extends Command {
 
@@ -15,8 +17,8 @@ public class TestCommand extends Command {
 
     public TestCommand() {
         super("TestCommand", "A simple test command", "`{{cmd_prefix}}testCommand`, idk really what it does.", COMMANDS, "debug");
-        this.requiredBotPermissions = new Permission[]{Permission.ADMINISTRATOR};
-        this.requiredUserPermissions = new Permission[]{Permission.ADMINISTRATOR};
+        this.requiredBotPermissions = Arrays.stream(new Permission[]{Permission.ADMINISTRATOR}).toList();
+        this.requiredUserPermissions = Arrays.stream(new Permission[]{Permission.ADMINISTRATOR}).toList();
     }
 
     Logger logger = LogManager.getLogger(TestCommand.class);
