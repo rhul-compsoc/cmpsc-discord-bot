@@ -3,6 +3,7 @@ package uk.co.hexillium.rhul.compsoc;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.command.UserContextInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.GenericSelectMenuInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -54,6 +55,8 @@ public class EventManager implements EventListener{
             dispatcher.handleSlashCommand(event);
         } else if (genericEvent instanceof GenericSelectMenuInteractionEvent<?,?> event){
             dispatcher.dispatchSelectionMenu( event);
+        } else if (genericEvent instanceof UserContextInteractionEvent event){
+            dispatcher.handleUserContextCommand(event);
         }
     }
 }

@@ -32,7 +32,11 @@ public class Mail {
             }
         });
         try {
-            fromAddress = new InternetAddress("compsocbot@hexillium.co.uk");
+            fromAddress = new InternetAddress(configuration.getFromAddress());
+
+            logger.info("Started mail agent with host as {}, port as {}, username as {} and password as {}",
+                    configuration.getHostUrl(), configuration.getPort(), configuration.getUsername(),
+                    configuration.getPassword().substring(0,3) + "*".repeat(configuration.getPassword().length() - 2));
         } catch (AddressException ex){
             logger.error("Failed to resolve from address.  Mail will not be sent", ex);
         }
@@ -57,7 +61,7 @@ public class Mail {
             multipart.addBodyPart(mimeBodyPart);
 
             message.setContent(multipart);
-
+            logger.info("About to send a message to " + toAddress.toString() + ".");
             Transport.send(message);
         } catch (MessagingException ex){
             logger.error("Failed to send message", ex);

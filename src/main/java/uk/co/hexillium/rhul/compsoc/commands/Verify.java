@@ -32,20 +32,25 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
 
     Pattern emailAddressVerifier = Pattern.compile("[a-z]{4}\\d{3,4}@live.rhul.ac.uk");
     String body = """
-            Hello, this email has been sent to you because {@discorduser} has requested a verification email.
-            If this was not you, please disregard this email in its entirety, and the code will expire with nothing being verified.
-            If you have had too many of these emails and you're not sure why, please reply to this email and I (the creator of this bot) will investigate.
-            
-            Finally, if this was you, your code is {@code}
+            <p>
+            Hello, this email has been sent to you because {@discorduser} has requested a verification email.<br>
+            If this was not you, please disregard this email in its entirety, and the code will expire with nothing being verified.<br>
+            If you have had too many of these emails and you're not sure why, please reply to this email and I (the creator of this bot) will investigate.<br>
+            </p>
+            <p>
+            Finally, if this was you, your code is {@code}<br>
             You can use this code with /verifycode to verify.
+            </p>
             """;
 
     @Override
     public List<CommandData> registerGlobalCommands() {
         return List.of(
                 Commands.slash("verifyemail", "Verify your email address to prove studentship")
-                        .addOption(OptionType.STRING, "email address", "Your RHUL email address, in zzzz000@live.rhul.ac.uk format", true, false),
+                        .setDefaultPermissions(DefaultMemberPermissions.ENABLED)
+                        .addOption(OptionType.STRING, "email_address", "Your RHUL email address, in zzzz000@live.rhul.ac.uk format", true, false),
                 Commands.slash("verifycode", "Redeem your code to verify your email address")
+                        .setDefaultPermissions(DefaultMemberPermissions.ENABLED)
                         .addOption(OptionType.STRING, "code", "The code sent in your email."),
                 Commands.user("Verification Information")
                         .setDefaultPermissions(DefaultMemberPermissions.DISABLED)
@@ -63,7 +68,7 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
                 return;
             }
 
-            String emailAddr = event.getOption("email address", OptionMapping::getAsString);
+            String emailAddr = event.getOption("email_address", OptionMapping::getAsString);
             if (emailAddr == null){
                 return;
             }
@@ -86,10 +91,10 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
 
             Matcher matcher = emailAddressVerifier.matcher(emailAddr);
             if (!matcher.matches()){
-                event.reply("Please ensure you have the email address in the correct RHUL format, " +
-                        "containing your 4 letter code and 3 numbers, using `live.` in the domain.")
+                event.getHook().sendMessage("Please ensure you have the email address in the correct RHUL format, " +
+                        "containing your 4 letter code and 3 numbers, using `live.` in the domain.  (This check is run, but its result ignored for testing... proceeding anyway...")
                         .setEphemeral(true).queue();
-                return;
+//                return;
             }
 
             Address address;
@@ -117,14 +122,18 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
                     .replace("{@code}", code);
 
 
-            try {
-                Bot.mail.sendMessage(address, "Verification Email for CompSocBot", toSend);
-                Database.EMAIL_VERIFICATION.registerEmailToSend(emailAddr, OffsetDateTime.now().plusDays(2), bytes, event.getUser().getIdLong());
-                event.reply("Email sent! Make sure to check your junk folder.").setEphemeral(true).queue();
+                event.reply("Sending email...").setEphemeral(true).queue();
+            String finalEmailAddr = emailAddr;
+            Database.runLater(() -> {
+                    try {
+                        Bot.mail.sendMessage(address, "Verification Email for CompSocBot", toSend);
+                        Database.EMAIL_VERIFICATION.registerEmailToSend(finalEmailAddr, OffsetDateTime.now().plusDays(2), bytes, event.getUser().getIdLong());
+                        event.getHook().editOriginal("Email sent! Make sure to check your junk folder.").queue();
+                    } catch (MessagingException e) {
+                        event.getHook().editOriginal("Failed to send email.  Please contact `hexillium` for assistance").queue();
+                    }
+                });
 
-            } catch (MessagingException e) {
-                event.reply("Failed to send email.  Please contact `hexillium` for assistance").setEphemeral(true).queue();
-            }
 
         }
         if (event.getName().equals("verifycode")){
@@ -155,7 +164,7 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
     @Override
     public void handleUserContextCommand(UserContextInteractionEvent event) {
         if (event.getName().equals("Verification Information")){
-            OffsetDateTime time = Database.EMAIL_VERIFICATION.getMostRecentVerificationAttempt(event.getIdLong());
+            OffsetDateTime time = Database.EMAIL_VERIFICATION.getUserMostRecentSuccessfulVerification(event.getTarget().getIdLong());
             if (time == null) {
                 event.reply("This user is not verified.").setEphemeral(true).queue();
             } else {

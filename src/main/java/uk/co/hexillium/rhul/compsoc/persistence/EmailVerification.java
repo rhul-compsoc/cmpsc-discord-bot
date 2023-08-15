@@ -23,7 +23,7 @@ public class EmailVerification {
             "select verif_id, discord_snowflake, time_expiry from email_verification where token = ? and verification_completed = false;";
 
     private final static String UPDATE_VERIFICATION_MARK_SUCCESS =
-            "update email_verification set verification_completed_time = now() and verification_completed = true " +
+            "update email_verification set verification_completed_time = now(), verification_completed = true " +
                     "where verif_id = ?;";
 
     private final static String GET_MOST_RECENT_ATTEMPT_ANY =
@@ -34,6 +34,13 @@ public class EmailVerification {
                     "where discord_snowflake = ? " +
                     "and verification_completed = true " +
                     "order by verification_completed_time desc;";
+
+    private final static String HAS_USER_OPEN_VERIFICATION_EMAIL =
+            "select verif_id from email_verification where verification_completed = false and time_expiry < now() and " +
+                    "discord_snowflake = ? and email_addr = ?;";
+
+    private final static String INVALIDATE_ALL_OTHER_VERIFICATIONS =
+            "update email_verification set time_expiry = now() - interval '1 day' where verif_id <> ? and discord_snowflake = ?;";
 
     private HikariDataSource source;
 
@@ -56,6 +63,24 @@ public class EmailVerification {
         }
     }
 
+    public boolean hasUserOpenVerificationWithEmail(long discordUserSnowflake, String emailAddr){
+        try (Connection connection = source.getConnection();
+             PreparedStatement statement = connection.prepareStatement(HAS_USER_OPEN_VERIFICATION_EMAIL)){
+
+            statement.setString(1, emailAddr);
+            statement.setLong(2, discordUserSnowflake);
+            ResultSet set = statement.executeQuery();
+
+            if (set.next()){
+                return true;
+            }
+
+        } catch (SQLException ex){
+            LOGGER.error("Failed test user for dangling verification", ex);
+        }
+        return false;
+    }
+
     public VerificationResult acceptToken(byte[] token, long requestedOwnerSnowflake){
         try (Connection connection = source.getConnection();
              PreparedStatement statement = connection.prepareStatement(FIND_VERIFICATION_BY_TOKEN)){
@@ -75,15 +100,24 @@ public class EmailVerification {
                 return VerificationResult.MISMATCHING_USER_ID;
             }
 
-            if (expiryTime.isAfter(OffsetDateTime.now())){
+            if (expiryTime.isBefore(OffsetDateTime.now())){
                 return VerificationResult.EXPIRED_TOKEN;
             }
 
             try (PreparedStatement update = connection.prepareStatement(UPDATE_VERIFICATION_MARK_SUCCESS)){
                 update.setLong(1, verificationId);
                 update.executeUpdate();
-                return VerificationResult.SUCCESS;
+
+                try (PreparedStatement invalidate = connection.prepareStatement(INVALIDATE_ALL_OTHER_VERIFICATIONS)){
+                    invalidate.setLong(1, verificationId);
+                    invalidate.setLong(2, requestedOwnerSnowflake);
+                    invalidate.executeUpdate();
+
+                    return VerificationResult.SUCCESS;
+                }
             }
+
+
 
         } catch (SQLException ex){
             LOGGER.error("Failed update email verification", ex);

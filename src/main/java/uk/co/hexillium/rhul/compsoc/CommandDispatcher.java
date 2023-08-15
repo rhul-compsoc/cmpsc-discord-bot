@@ -5,6 +5,7 @@ import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ScanResult;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.command.UserContextInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.GenericSelectMenuInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -16,6 +17,7 @@ import uk.co.hexillium.rhul.compsoc.commands.Command;
 import uk.co.hexillium.rhul.compsoc.commands.handlers.ComponentInteractionHandler;
 import uk.co.hexillium.rhul.compsoc.commands.handlers.InteractionCommandHandler;
 import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
+import uk.co.hexillium.rhul.compsoc.commands.handlers.UserCommandHandler;
 import uk.co.hexillium.rhul.compsoc.crypto.HMAC;
 import uk.co.hexillium.rhul.compsoc.persistence.Database;
 import uk.co.hexillium.rhul.compsoc.persistence.entities.GuildSettings;
@@ -45,6 +47,7 @@ public class CommandDispatcher {
     private List<ComponentInteractionHandler> buttons;
 //    private List<SlashCommandHandler> slashCommands;
     private List<InteractionCommandHandler> interactionCommandHandlers;
+    private List<UserCommandHandler> userContextCommandHandlers;
     private HashMap<String, InteractionCommandHandler> slashCommandMap;
     private final HMAC hmac;
 
@@ -53,6 +56,7 @@ public class CommandDispatcher {
         this.triggerMap = new HashMap<>();
         this.buttonMap = new HashMap<>();
         this.slashCommandMap = new HashMap<>();
+        this.userContextCommandHandlers = new ArrayList<>();
 
         buttons = new ArrayList<>();
         interactionCommandHandlers = new ArrayList<>();
@@ -66,8 +70,10 @@ public class CommandDispatcher {
                              .enableAnnotationInfo()
                              .scan()) {
             System.out.println(scanResult.getAllClasses().toString());
-            for (ClassInfo routeClassInfo : scanResult.getSubclasses(pkg + ".Command")
-                    .union(scanResult.getClassesImplementing(pkg + ".ComponentInteractionHandler"))
+            for (ClassInfo routeClassInfo : scanResult.getSubclasses(Command.class.getName())
+                    .union(scanResult.getClassesImplementing(ComponentInteractionHandler.class.getName()))
+                    .union(scanResult.getClassesImplementing(InteractionCommandHandler.class.getName()))
+                    .exclude(scanResult.getAllInterfaces())
                     .exclude(scanResult.getClassesWithAnnotation("uk.co.hexillium.rhul.compsoc.Disabled"))) {
                 try {
                     Class<?> current = routeClassInfo.loadClass();
@@ -84,6 +90,10 @@ public class CommandDispatcher {
                     if (newInst instanceof InteractionCommandHandler){
                         this.interactionCommandHandlers.add((SlashCommandHandler) newInst);
                         logger.info("Adding Slash Command Handler " + current.getName());
+                    }
+                    if (newInst instanceof UserCommandHandler handler){
+                        this.userContextCommandHandlers.add(handler);
+                        logger.info("Adding user context command handler " + current.getName());
                     }
                     logger.info("Loaded " + routeClassInfo.loadClass().getName());
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
@@ -182,6 +192,12 @@ public class CommandDispatcher {
             CommandEvent cmdE = new CommandEvent(event);
             toRun.internalHandleCommand(cmdE);
         });
+    }
+
+    public void handleUserContextCommand(UserContextInteractionEvent event){
+        for (UserCommandHandler handler : userContextCommandHandlers){
+            handler.handleUserContextCommand(event);
+        }
     }
 
     public void handleSlashCommand(SlashCommandInteractionEvent event){

@@ -267,7 +267,7 @@ public class Register extends Command implements EventListener {
             return;
         }
         if (!(genericEvent instanceof MessageReactionAddEvent reactionAddEvent)){
-            if (genericEvent instanceof MessageReceivedEvent event){
+            if (genericEvent instanceof MessageReceivedEvent event && !event.isFromGuild()){
                 if (!event.getMessage().getAttachments().isEmpty() && event.getMessage().getContentRaw().isBlank()){
                     event.getAuthor().openPrivateChannel().queue(ch -> {
                         ch.sendMessageEmbeds(missingCommand()).queue();
