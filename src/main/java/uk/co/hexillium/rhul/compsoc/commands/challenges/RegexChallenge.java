@@ -2,12 +2,13 @@ package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
 import com.google.re2j.Matcher;
 import com.google.re2j.Pattern;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
+import uk.co.hexillium.rhul.compsoc.commands.Trivia;
 
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -18,44 +19,91 @@ public class RegexChallenge extends Challenge {
         public static final int MAX_REPEATS = 5;
     }
 
+    final static int MAX_QUESTION_RESPONSES = 3;
     final static char[] validChars = ("ABCDEFGH" + /* "I" + */ "JK" + /* "L" + */ "MN" + /* "O" + */ "PQRSTUVWXYZ23456789" /* + "\\.*$^(){}[]"*/).toCharArray();
     final static HashSet<Character> validCharSet = new HashSet<>();
-
     static {
         for (char c : validChars) {
             validCharSet.add(c);
         }
     }
+    final static Pattern answerValidPattern = Pattern.compile("(?:\\w\\s?,?\\s?)+", Pattern.CASE_INSENSITIVE);
+    final static Pattern answerCorrectPattern = Pattern.compile("(\\w)", Pattern.CASE_INSENSITIVE);
+    final static char ZWS = '\u200B';
 
+
+    private final String representation;
+    private final List<String> responses;
+    private final long correctResponses;
+    private final RegexGroup root;
     public static char genRandomChar() {
         return validChars[ThreadLocalRandom.current().nextInt(validChars.length)];
     }
 
     public static void main(String[] args) {
-        RegexGroup root = new RegexGroup(2, 2, 0);
-        String repr = root.getRepresentation();
-//            System.out.println("^" + repr + "$");
-        Pattern pattern = Pattern.compile(repr);
-
-        Matcher matcher;
-
-        System.out.println(repr);
-        for (int i = 0; i < 3; i++) {
-            String ans1 = root.generateAnswer(true);
-            matcher = pattern.matcher(ans1);
-            System.out.println(ans1 + "=" + matcher.matches());
-        }
-
-        for (int i = 0; i < 3; i++) {
-            String ans2 = root.generateAnswer(false);
-            matcher = pattern.matcher(ans2);
-            System.out.println(ans2 + "=" + matcher.matches());
-        }
-
-
     }
 
-    public RegexChallenge() {
+    public RegexChallenge(int depth, int hardness) {
+
+        root = new RegexGroup(depth, hardness, 0);
+        this.representation = root.getRepresentation();
+
+        Pattern pattern = Pattern.compile(representation);
+        Matcher matcher;
+
+        List<String> question = new ArrayList<>();
+
+        int numCorrect = ThreadLocalRandom.current().nextInt(1, MAX_QUESTION_RESPONSES + 1);
+        int numIncorrect = 3 - numCorrect;
+
+        for (int i = 0; i < numCorrect; i++) {
+            String ans1 = root.generateAnswer(true);
+            boolean matches = false;
+            while (!matches){
+                ans1 = root.generateAnswer(true);
+                matcher = pattern.matcher(ans1);
+                matches = matcher.matches();
+            }
+            question.add(ans1);
+        }
+
+        for (int i = 0; i < numIncorrect; i++) {
+            String ans1 = root.generateAnswer(false);
+            boolean matches = true;
+            while (matches){
+                ans1 = root.generateAnswer(false);
+                matcher = pattern.matcher(ans1);
+                matches = matcher.matches();
+            }
+            question.add(ans1);
+        }
+
+        BitSet set = new BitSet(MAX_QUESTION_RESPONSES);
+        set.set(0, numCorrect, true);
+
+        for (int i = 0; i < question.size(); i++){
+            int selectionIndex = ThreadLocalRandom.current().nextInt(i, question.size());
+
+            String temp = question.get(i);
+            question.set(i, question.get(selectionIndex));
+            question.set(selectionIndex, temp);
+
+            boolean tempCorr = set.get(i);
+            set.set(i, set.get(selectionIndex));
+            set.set(selectionIndex, tempCorr);
+
+        }
+
+        long l = set.stream()
+                .takeWhile(i -> i < Long.SIZE)
+                .mapToLong(i -> 1L << i)
+                .reduce(0, (f, b) -> f | b);
+
+        this.correctResponses = l;
+        this.responses = question;
+
+        System.out.println(question);
+        System.out.println(Long.toBinaryString(l));
     }
 
     @Override
@@ -65,27 +113,87 @@ public class RegexChallenge extends Challenge {
 
     @Override
     public String getQuestion() {
-        return null;
+        StringBuilder answers = new StringBuilder();
+        for (int i = 0; i < this.responses.size(); i++){
+            answers.append(validChars[i])
+                    .append(": `")
+                    .append(cleanOptionForPresenting(this.responses.get(i)))
+                    .append("`\n");
+        }
+        return """
+                Which of the strings below are matched by this regex?
+                Partial points are awarded for mostly correct answers.  At least one option is matched by this regex.```regex
+                %s```\
+                %s"""
+                .formatted(this.representation, answers.toString());
     }
 
     @Override
     public int getPoints(boolean correct) {
-        return 0;
+        return 0; //todo decide on points; zero whilst testing
     }
 
     @Override
     public boolean isValidAnswer(String answer) {
-        return false;
+        // answers as a case-insensitive unordered list
+        return answerValidPattern.matches(answer);
+    }
+
+    public static final char REGIONAL_BASE = '\uD83C';
+    public static final char REGIONAL_A = '\uDDE6';
+
+    @Override
+    public Collection<ActionRow> getReactionRow() {
+        var selectMenu = StringSelectMenu.create(Trivia.buttonPrefix[1] + "|sm");
+        for (int i = 0; i < this.responses.size(); i++){
+            char c = validChars[i];
+            String content = this.responses.get(i);
+            selectMenu.addOption(
+                    c + ": " + content.substring(0, Math.min(content.length(),97)),
+                    c + "", "Add " + c + " to the list of matches",
+                    Emoji.fromUnicode(REGIONAL_BASE + "" + (char) ((short) REGIONAL_A + i)));
+        }
+        selectMenu.setMaxValues(this.responses.size());
+        return List.of(ActionRow.of(selectMenu.build()));
     }
 
     @Override
     public boolean isCorrectAnswer(String answer) {
-        return false;
+        return getCorrectCount(answer) == this.responses.size();
+    }
+
+    private int getCorrectCount(String answer){
+        List<Character> letters = new ArrayList<>();
+        Matcher m = answerCorrectPattern.matcher(answer);
+        while (m.find()){
+            letters.add(m.group().charAt(0));
+        }
+        int correctCount = 0;
+        for (int i = 0; i < this.responses.size(); i++){
+            boolean matches = (this.correctResponses & (1L << i)) > 0;
+            boolean wasPresented = letters.contains(validChars[i]);
+            if (matches ^ !wasPresented)
+                correctCount++;
+        }
+        return correctCount;
+    }
+
+    private static String cleanOptionForPresenting(String str){
+        var strbld = new StringBuilder(str);
+        if (str.length() > 4)
+           strbld.insert(str.length()-ThreadLocalRandom.current().nextInt(str.length()-2)-1, ZWS);
+        return strbld.toString().replace("\u0000", "");
     }
 
     @Override
     public String getSolution() {
-        return null;
+        StringBuilder builder = new StringBuilder();
+        for (int i = 0; i < this.responses.size(); i++){
+            boolean matches = (this.correctResponses & (1L << i)) > 0;
+            if (matches)
+                builder.append(validChars[i]);
+        }
+        return builder.toString();
     }
 
     @Override
@@ -95,7 +203,7 @@ public class RegexChallenge extends Challenge {
 
     @Override
     public int minimumSolveTimeSeconds() {
-        return 0;
+        return 120;
     }
 
     @Override
@@ -105,7 +213,7 @@ public class RegexChallenge extends Challenge {
 
     @Override
     public String getDebugInformation() {
-        return null;
+        return root.getDebugString();
     }
 }
 
@@ -124,8 +232,18 @@ abstract class RegexNode {
                 num = incorrect;
             }
         }
+
+        //if genCorrectly is false, then pick excatly one of the children to generate incorrectly rather than all of them
+        int j = -1;
+        if (!genCorrectly){
+            j = Trivia.randInclusive(0, num);
+        }
         for (int i = 0; i < num; i++) {
-            bld.append(generateSingleAnswer(genCorrectly));
+            j--;
+            bld.append(generateSingleAnswer(j != 0));
+        }
+        if (!correct){
+            bld.append("\u0000");
         }
         return bld.toString();
     }
@@ -236,7 +354,6 @@ class RegexOrCluster extends RegexNode {
         bld.deleteCharAt(bld.length() - 1); //remove the trailing pipe
         if (this.groups.length > 1) {
             bld.append(")");
-            this.modifier.getRepr();
         }
         if (displayModifier) {
             bld.append(this.modifier.getRepr());
@@ -245,7 +362,7 @@ class RegexOrCluster extends RegexNode {
     }
 
     String getDebugString() {
-        return "RegexOrCluster:{modifier=" + modifier.getDebugString() + ",groups=" + Arrays.stream(groups).map(RegexNode::getDebugString).collect(Collectors.toList()) + "}";
+        return "RegexOrCluster:{modifier=" + modifier.getDebugString() + ",groups=" + Arrays.stream(groups).map(RegexNode::getDebugString).toList() + "}";
     }
 }
 

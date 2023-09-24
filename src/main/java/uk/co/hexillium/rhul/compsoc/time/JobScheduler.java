@@ -67,7 +67,7 @@ public class JobScheduler {
         queueLock = new ReentrantReadWriteLock();
     }
 
-    public void initialise() {
+    public synchronized void initialise() {
         if (initialised) return;
         scheduler.scheduleAtFixedRate(this::enqueueNewJobs, 0, MILLISECONDS_TO_FETCH_JOBS, TimeUnit.MILLISECONDS);
         scheduler.scheduleAtFixedRate(this::registerUpcomingJobs, 30 * 1000, MILLISECONDS_TO_REGISTER_JOBS, TimeUnit.MILLISECONDS);

@@ -1,6 +1,10 @@
 package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
 
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import uk.co.hexillium.rhul.compsoc.commands.Trivia;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -9,6 +13,8 @@ import java.awt.geom.QuadCurve2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
@@ -110,6 +116,13 @@ public class BooleanAlgebra extends Challenge{
         return convertAnswer(answer) == this.head.getValue();
     }
 
+    @Override
+    public Collection<ActionRow> getReactionRow() {
+        // "a" -> answer, "t" -> true, "f" -> false;
+        String trStr = (Trivia.buttonPrefix[0] + "|" + "at");
+        String faStr = (Trivia.buttonPrefix[0] + "|" + "af");
+        return Collections.singletonList(ActionRow.of(Button.success(trStr, "TRUE"), Button.danger(faStr, "FALSE")));
+    }
 
     @Override
     public String getQuestion(){

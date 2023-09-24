@@ -39,7 +39,7 @@ public class CommandEvent {
     public CommandEvent(MessageReceivedEvent event) {
         isGuildMessage = event.isFromGuild();
         this.messageReceivedEvent = event;
-        if (isGuildMessage){
+        if (!isGuildMessage){
             privateChannel = event.getChannel().asPrivateChannel();
         } else {
             textChannel = event.getChannel().asGuildMessageChannel();

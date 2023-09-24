@@ -8,6 +8,8 @@ import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.GenericSelectMenuInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
 import net.dv8tion.jda.api.interactions.InteractionHook;
@@ -18,6 +20,8 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.interactions.components.selections.SelectMenu;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.utils.TimeUtil;
 import org.apache.logging.log4j.LogManager;
@@ -58,6 +62,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class Trivia extends Command implements EventListener, ComponentInteractionHandler, SlashCommandHandler {
 
@@ -71,7 +76,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     private static final Logger LOGGER = LogManager.getLogger(Trivia.class);
 
     private static final String[] commands = {"t", "triv", "trivia", "leaderboard", "lb", "solve"};
-    private static final String[] buttonPrefix = {"c:tr"}; //command:trivia
+    public static final String[] buttonPrefix = {"c:tr", "c:rc"}; //command:trivia, command:regexchallenge
     private static final List<String> buttonHandles;
     private static final long channelID = 766050353174544384L;
 
@@ -130,7 +135,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         return strbld.toString();
     }
 
-    static int randInclusive(int lower, int upper) {
+    public static int randInclusive(int lower, int upper) {
         return lower + ThreadLocalRandom.current().nextInt((upper - lower) + 1);
     }
 
@@ -140,14 +145,10 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     }
 
     private void postChallenge(Challenge newQ, GuildMessageChannel tc) {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        try {
-            ImageIO.write(newQ.getImage(), "png", os);
-        } catch (IOException ex) {
-            LOGGER.error("Failed to send image", ex);
-            return;
-        }
-        tc.sendMessageEmbeds(askQuestion(newQ)).setComponents(getBooleanActionRow(newQ)).addFiles(FileUpload.fromData(os.toByteArray(), "image.png")).queue(msg -> {
+        tc.sendMessageEmbeds(askQuestion(newQ))
+                .setComponents(newQ.getReactionRow())
+                .addFiles(newQ.getFileUploads())
+                .queue(msg -> {
             lock.lock();
             try {
                 makeSpace(tc);
@@ -183,18 +184,29 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         );
     }
 
-    private Collection<ActionRow> getBooleanActionRow(Challenge challenge) {
-        if (!(challenge instanceof BooleanAlgebra)) {
-            return Collections.emptyList();
-        }
-        // "a" -> answer, "t" -> true, "f" -> false;
-        String trStr = (buttonPrefix[0] + "|" + "at");
-        String faStr = (buttonPrefix[0] + "|" + "af");
-        return Collections.singletonList(ActionRow.of(Button.success(trStr, "TRUE"), Button.danger(faStr, "FALSE")));
+    @Override
+    public void initComponentInteractionHandle(JDA jda) {
     }
 
     @Override
-    public void initComponentInteractionHandle(JDA jda) {
+    public void handleSelectionMenuInteraction(GenericSelectMenuInteractionEvent<?, ?> interaction) {
+        SelectMenu menu = interaction.getSelectMenu();
+        if (menu instanceof StringSelectMenu ssm
+                && interaction instanceof StringSelectInteractionEvent event){
+            if (ssm.getId() == null) return;
+            if (ssm.getId().equals("c:rc|sm")){
+                String data = String.join("", event.getValues());
+                if (recentSentMessageID != interaction.getMessageIdLong()) {
+                    interaction.deferEdit().queue();
+                    interaction.getHook().editOriginalComponents(Collections.emptyList()).queue();
+                    interaction.getHook().sendMessage("Error: answer button tagged on non-recent message. Please report this error.").setEphemeral(true).queue();
+                    return;
+                }
+                answerQuestion(data,
+                        interaction.getUser(), interaction.getChannel().asGuildMessageChannel(),
+                        err -> interaction.reply(err).setEphemeral(true).queue());
+            }
+        }
     }
 
     @Override
@@ -305,7 +317,7 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
             }
             Database.runLater(() -> {
                 recentMessageSpawnID = event.getMessageIdLong();
-                Challenge question = genQuestion();
+                Challenge question = genRandomQuestion();
 //                Challenge question = getBoolAlgebra();
                 postChallenge(question, target);
             });
@@ -313,19 +325,15 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
     }
 
     private Challenge getChallengeForId(int id) {
-        switch (id) {
-            case 0:
-                return getBoolAlgebra();
-            case 1:
-                return genBFSChallenge();
-            case 2:
-                return genDFSChallenge();
-            case 3:
-                return genMinSpanTree();
-            case 4:
-                return genDijkstraChallenge();
-        }
-        return getBoolAlgebra();
+        return switch (id) {
+            case 0 -> getBoolAlgebra();
+            case 1 -> genBFSChallenge();
+            case 2 -> genDFSChallenge();
+            case 3 -> genMinSpanTree();
+            case 4 -> genDijkstraChallenge();
+            case 5 -> genRegexChallenge();
+            default -> null;
+        };
     }
 
     private void makeSpace(GuildMessageChannel channel) {
@@ -564,36 +572,10 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         return embed.build();
     }
 
-    private Challenge genQuestion() {
+    private Challenge genRandomQuestion() {
         //pick what type we are going for:
         int type = randInclusive(0, 4);
-        switch (type) {
-            case 0:
-                return getBoolAlgebra();
-            case 1:
-                return genBFSChallenge();
-            case 2:
-                return genDFSChallenge();
-            case 3:
-                return genMinSpanTree();
-            case 4:
-                return genDijkstraChallenge();
-
-        }
-        return getBoolAlgebra();
-//        int type = randInclusive(0, 4);
-//        switch (type){
-//            case 0: //boolean algebra
-//                return getBoolAlgebra();
-//            case 1: //maths question
-//                return getMathsQuestion();
-//            case 2: //multi-round maths question
-//                return getMultiRoundMaths();
-//            case 3: //base conversion
-//                return getBaseQuestion();
-//            case 4: //hash request
-//                return getHashQuestion();
-//        }
+        return getChallengeForId(type);
     }
 
     private Challenge getBoolAlgebra() {
@@ -631,6 +613,13 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         MinimumSpanningTreeChallenge challenge = new MinimumSpanningTreeChallenge(nodes);
         LOGGER.info("Spawning new SpanTree Challenge - nodes: " + nodes + " with score " + challenge.getPoints(true) + "/" + challenge.getPoints(false) + " opcount:" + challenge.getSolveOperationCount());
         return challenge;
+    }
+
+    private Challenge genRegexChallenge(){
+        int hardness = randInclusive(1,3);
+        int depth = randInclusive(2,3);
+        LOGGER.info("Spawning new regex challenge with depth = %d and hardness = %d".formatted(depth, hardness));
+        return new RegexChallenge(depth, hardness);
     }
 
 
