@@ -1,8 +1,12 @@
 package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
-import java.awt.Graphics2D;
+import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -29,7 +33,7 @@ public class BFSChallenge extends GraphChallenge{
     public String getQuestion() {
         return "Using a breadth-first-search starting from node " + from.label + ", in which order would the nodes of this tree be explored?\n\n" +
                 "Please give your answer as each of the nodes' letters in the correct order.  A node's children may be explored in any order permitted by BFS.\n" +
-                "Example: `!t ABCDEFG`";
+                "Example: `!t ABCDEFG` \nThe answer shows the groups of nodes with the same distance.  As this is distance may be the same for many nodes, these are shown in `[]`, and the order inside the `[]` may be changed.";
     }
 
     @Override
@@ -71,13 +75,35 @@ public class BFSChallenge extends GraphChallenge{
 
     @Override
     public String getSolution() {
-        return this.from.label + this.solution.stages.stream().flatMap(Collection::stream).collect(Collectors.joining());
+        return this.from.label + this.solution.stages.stream().map(stage -> "[" + String.join("", stage) + "]").collect(Collectors.joining(" "));
     }
 
     @Override
     public BufferedImage generateSolutionImage() {
-        return getImage(); //I don't really know how I can make a solution image for this...
+        BufferedImage baseImage = getImage();
+        BufferedImage colourMap = new BufferedImage(baseImage.getWidth(), baseImage.getHeight(), BufferedImage.TYPE_INT_ARGB);
+
+        int stages = this.solution.stages.size();
+
+        float startHue = 240 / 360f;
+        float endHue = (360 + 60) / 360f;
+
+        float hueGap = (endHue - startHue) / stages;
+
+        List<Color> colors = new ArrayList<>();
+        for (int i = 0; i < stages; i++){
+            colors.add(Color.getHSBColor(startHue + hueGap * (i + 1), 0.8f, 0.8f));
+        }
+
+        VoronoiGraph voronoiGraph = graph.createDual();
+//        voronoiGraph.drawDebugImage();
+        voronoiGraph.paintBackground(colourMap, solution.stages, colors);
+
+        colourMap.getGraphics().drawImage(baseImage, 0, 0, baseImage.getWidth(), baseImage.getHeight(), null);
+
+        return colourMap;
     }
+
 
     @Override
     public int minimumSolveTimeSeconds() {

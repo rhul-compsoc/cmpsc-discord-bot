@@ -149,7 +149,7 @@ public class DijkstraChallenge extends GraphChallenge{
 
         int nodesize = 40;
         int bordersize = 4;
-        graph.drawNodes(g2, fontSize, nodesize, bordersize, true);
+        graph.drawNodes(g2, fontSize, nodesize, bordersize, graph.nodes);
         return image;
     }
 
@@ -174,7 +174,7 @@ public class DijkstraChallenge extends GraphChallenge{
         );
     }
 
-    public Path[] findPath(Node source, Node destination){
+    Path[] findPath(Node source, Node destination){
         //Paths are sorted on their length, so the first path is the shortest
         PriorityQueue<Path> paths = new PriorityQueue<>(Comparator.comparing(Path::getCost));
         HashSet<Node> explored = new HashSet<>();

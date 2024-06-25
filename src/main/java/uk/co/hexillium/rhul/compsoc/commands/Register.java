@@ -47,7 +47,7 @@ public class Register extends Command implements EventListener {
 
     @Override
     public void handleCommand(CommandEvent event) {
-        if (event.getChannel().getType().isGuild()){
+        if (event.getChannel().getType().isGuild()) {
             //send a dm
             boolean canSubmit = Database.STUDENT_VERIFICATION.canSubmitRequest(event.getAuthor().getIdLong());
             event.getUser().openPrivateChannel().queue(pc -> {
@@ -67,48 +67,48 @@ public class Register extends Command implements EventListener {
             });
             return;
         }
-        if (!(event.getChannel().getType() == ChannelType.PRIVATE)){
+        if (!(event.getChannel().getType() == ChannelType.PRIVATE)) {
             //??? what happened
             logger.error("I don't know what happened: " + event.getChannel().getClass().getName());
             return;
         }
-        if (event.getArgs().length == 0){
+        if (event.getArgs().length == 0) {
             event.reply(getYourPrivateData());
             return;
         }
-        if (event.getArgs().length != 2){
+        if (event.getArgs().length != 2) {
             event.sendEmbed("Error in formatting", "I was expecting a picture of your card and `!register aaaa999@live.rhul.ac.uk 100999999`\n\n" +
                     "Your email can also be `first.last.year@live.rhul.ac.uk`", 0xff0000);
             return;
         }
         if (event.getMessage().getAttachments().size() == 0
-                || !event.getMessage().getAttachments().get(0).isImage()){
+                || !event.getMessage().getAttachments().get(0).isImage()) {
             event.sendEmbed("Please resend, and attach a picture of your studentID",
                     "To ensure verification please resend your verification message, and attach a picture of your student ID.  \nWe will not store your image.", 0xff0000);
             return;
         }
-        if (event.getMessage().getAttachments().get(0).getSize() > 8 * 1000 * 1000){
+        if (event.getMessage().getAttachments().get(0).getSize() > 8 * 1000 * 1000) {
             event.sendEmbed("Try another image", "That image is too large for us to process. There is an 8MB limit.", 0xff0000);
             return;
         }
         String loginName = event.getArgs()[0].toLowerCase().replaceAll("@rhul\\.ac\\.uk$", "@live.rhul.ac.uk"); //standardise the input;
         String studentID = event.getArgs()[1];
-        if (!LOGIN_NAME_VERIFY.matcher(loginName).matches()){
+        if (!LOGIN_NAME_VERIFY.matcher(loginName).matches()) {
             event.sendEmbed("I don't understand that email", "It should be in the format aaaa999@live.rhul.ac.uk or `first.last.year@live.rhul.ac.uk`", 0xff0000);
             return;
         }
-        if (!STUDENT_NUMBER_VERIFY.matcher(studentID).matches()){
+        if (!STUDENT_NUMBER_VERIFY.matcher(studentID).matches()) {
             event.sendEmbed("I don't understand that studentID", "It should be in the format 100999999", 0xff0000);
             return;
         }
-        if (!Database.STUDENT_VERIFICATION.canSubmitRequest(event.getAuthor().getIdLong())){
+        if (!Database.STUDENT_VERIFICATION.canSubmitRequest(event.getAuthor().getIdLong())) {
             event.reply(alreadyRegistered());
             return;
         }
 
         //emergency debugging
         MessageChannel channel = event.getJDA().getTextChannelById(CHANNEL_ID);
-        if (channel == null){
+        if (channel == null) {
             logger.error("Cannot find channel!");
             logger.info(event.getJDA().getTextChannelCache().asList());
             return;
@@ -117,17 +117,25 @@ public class Register extends Command implements EventListener {
         //looks good
 
         Message.Attachment attachment = event.getMessage().getAttachments().get(0);
-        attachment.retrieveInputStream().thenAccept(is -> {
+        attachment.getProxy().download().thenAccept(is -> {
             channel.sendMessageEmbeds(theirPrivateData(event.getUser(), loginName, studentID, attachment.getFileExtension()))
                     .addFiles(FileUpload.fromData(is, "card." + attachment.getFileExtension()))
                     .queue(m -> {
-                Database.STUDENT_VERIFICATION.addStudent(studentID, loginName, System.currentTimeMillis(),
-                        event.getUser().getIdLong(), m.getIdLong());
-                event.getUser().openPrivateChannel().queue(c -> c.sendMessageEmbeds(sentYourPrivateData()).queue(vrfy -> {
-                    m.addReaction(Emoji.fromUnicode("✅")).queue();
-                    m.addReaction(Emoji.fromUnicode("❌")).queue();
-                }));
-            });
+                        Database.STUDENT_VERIFICATION.addStudent(studentID, loginName, System.currentTimeMillis(),
+                                event.getUser().getIdLong(), m.getIdLong());
+                        event.getUser().openPrivateChannel().queue(c -> c.sendMessageEmbeds(sentYourPrivateData()).queue(vrfy -> {
+                            m.addReaction(Emoji.fromUnicode("✅")).queue();
+                            m.addReaction(Emoji.fromUnicode("❌")).queue();
+                        }), e -> {
+                            logger.error(e);
+                            event.getUser().openPrivateChannel().queue(c -> {
+                                c.sendMessage("Failed to send data.  Please ping `@hexillium` about this error.").queue();
+                            });
+                        });
+                    });
+        }).exceptionally(e -> {
+            logger.error("Failed fetching inputStream", e);
+            return null;
         });
 
 
@@ -144,7 +152,7 @@ public class Register extends Command implements EventListener {
         return false;
     }
 
-    private MessageEmbed getYourPrivateData(){
+    private MessageEmbed getYourPrivateData() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Register for CompSoc");
         embed.setDescription("Please send your RHUL email address, and your student number, with an image of your card attached.\n\nIt should look like this:\n`!register aaaa999@live.rhul.ac.uk 100999999`\n\n" +
@@ -154,7 +162,7 @@ public class Register extends Command implements EventListener {
         return embed.build();
     }
 
-    private MessageEmbed alreadyRegistered(){
+    private MessageEmbed alreadyRegistered() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Request failed.");
         embed.setDescription("Looks like you either have an active request open or are already registered.\n\n" +
@@ -163,7 +171,7 @@ public class Register extends Command implements EventListener {
         return embed.build();
     }
 
-    private MessageEmbed sentYourPrivateData(){
+    private MessageEmbed sentYourPrivateData() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Your data has been sent for review");
         embed.setDescription("You'll get another message here when a verdict has been reached");
@@ -172,7 +180,7 @@ public class Register extends Command implements EventListener {
     }
 
 
-    private MessageEmbed privateDataAccepted(){
+    private MessageEmbed privateDataAccepted() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Your data has been accepted");
         embed.setDescription("You've been verified as a member.");
@@ -181,7 +189,7 @@ public class Register extends Command implements EventListener {
     }
 
 
-    private MessageEmbed privateDataDenied(){
+    private MessageEmbed privateDataDenied() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Your data has been denied.");
         embed.setDescription("Please review the information and submit another.");
@@ -189,7 +197,7 @@ public class Register extends Command implements EventListener {
         return embed.build();
     }
 
-    private MessageEmbed missingCommand(){
+    private MessageEmbed missingCommand() {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("I don't know what to do with this.");
         embed.setDescription("If this was as part of a verification attempt, please send the verification command with this image attached.");
@@ -197,18 +205,18 @@ public class Register extends Command implements EventListener {
         return embed.build();
     }
 
-    private MessageEmbed theirPrivateData(User user, String loginName, String studentID, String fileExtension){
+    private MessageEmbed theirPrivateData(User user, String loginName, String studentID, String fileExtension) {
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("New verification attempt:");
         embed.addField(user.getAsTag(),
-                  "Login Name: `" + loginName + "`\r\n" +
+                "Login Name: `" + loginName + "`\r\n" +
                         "Student ID: `" + studentID + "`\r\n" +
-                          "Discord ID: `" + user.getIdLong() + "`\r\n" +
-                          "Mention: " + user.getAsMention(), false);
+                        "Discord ID: `" + user.getIdLong() + "`\r\n" +
+                        "Mention: " + user.getAsMention(), false);
         List<DuplicateEntry> entires = Database.STUDENT_VERIFICATION.getDuplicatesForID(studentID);
-        if (entires.size() > 0){
+        if (entires.size() > 0) {
             String ver = Arrays.toString(entires.stream().filter(e -> e.isVerified() && !e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
-            String unver =  Arrays.toString(entires.stream().filter(e -> !e.isVerified() && e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
+            String unver = Arrays.toString(entires.stream().filter(e -> !e.isVerified() && e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
             String pending = Arrays.toString(entires.stream().filter(e -> !e.isVerified() && !e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
 
             embed.addField("⚠ This student ID has been seen before:",
@@ -218,9 +226,9 @@ public class Register extends Command implements EventListener {
                     true);
         }
         entires = Database.STUDENT_VERIFICATION.getDuplicatesForName(loginName);
-        if (entires.size() > 0){
+        if (entires.size() > 0) {
             String ver = Arrays.toString(entires.stream().filter(e -> e.isVerified() && !e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
-            String unver =  Arrays.toString(entires.stream().filter(e -> !e.isVerified() && e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
+            String unver = Arrays.toString(entires.stream().filter(e -> !e.isVerified() && e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
             String pending = Arrays.toString(entires.stream().filter(e -> !e.isVerified() && !e.isInvalidated()).map(DuplicateEntry::getSnowflake).toArray());
 
             embed.addField("⚠ This student Name has been seen before:",
@@ -251,14 +259,14 @@ public class Register extends Command implements EventListener {
 
     @Override
     public void onEvent(@NotNull GenericEvent genericEvent) {
-        if (genericEvent instanceof GuildMemberJoinEvent){
+        if (genericEvent instanceof GuildMemberJoinEvent) {
             GuildMemberJoinEvent event = (GuildMemberJoinEvent) genericEvent;
-            if (event.getMember().getUser().isBot()){
+            if (event.getMember().getUser().isBot()) {
                 return;
             }
             Database.runLater(() -> {
                 boolean verified = Database.STUDENT_VERIFICATION.isDiscordAccountValidated(event.getMember().getUser().getIdLong());
-                if (verified){
+                if (verified) {
                     event.getGuild().addRoleToMember(event.getMember(), event.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
                     event.getGuild().addRoleToMember(event.getMember(), event.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
                     logger.info("Previously verified user joined server, adding roles");
@@ -266,9 +274,9 @@ public class Register extends Command implements EventListener {
             });
             return;
         }
-        if (!(genericEvent instanceof MessageReactionAddEvent reactionAddEvent)){
-            if (genericEvent instanceof MessageReceivedEvent event && !event.isFromGuild()){
-                if (!event.getMessage().getAttachments().isEmpty() && event.getMessage().getContentRaw().isBlank()){
+        if (!(genericEvent instanceof MessageReactionAddEvent reactionAddEvent)) {
+            if (genericEvent instanceof MessageReceivedEvent event && !event.isFromGuild()) {
+                if (!event.getMessage().getAttachments().isEmpty() && event.getMessage().getContentRaw().isBlank()) {
                     event.getAuthor().openPrivateChannel().queue(ch -> {
                         ch.sendMessageEmbeds(missingCommand()).queue();
                     });
@@ -277,13 +285,13 @@ public class Register extends Command implements EventListener {
             }
             return;
         }
-        if (reactionAddEvent.getChannel().getIdLong() != CHANNEL_ID){
+        if (reactionAddEvent.getChannel().getIdLong() != CHANNEL_ID) {
             return;
         }
         if (reactionAddEvent.getUser().isBot()) return;
 
         long messageID = reactionAddEvent.getMessageIdLong();
-        if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("✅"))){
+        if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("✅"))) {
             Database.STUDENT_VERIFICATION.validateStudent(System.currentTimeMillis(), messageID, studentID -> {
                 reactionAddEvent.getGuild().addRoleToMember(UserSnowflake.fromId(studentID), reactionAddEvent.getGuild().getRoleById(VERIFIED_ROLE_ID)).queue();
                 reactionAddEvent.getGuild().addRoleToMember(UserSnowflake.fromId(studentID), reactionAddEvent.getGuild().getRoleById(SERVER_MEMBER_ROLE_ID)).queue();
@@ -304,7 +312,7 @@ public class Register extends Command implements EventListener {
                     });
                 });
             });
-        } else if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("❌"))){
+        } else if (reactionAddEvent.getReaction().getEmoji().equals(Emoji.fromUnicode("❌"))) {
             Database.STUDENT_VERIFICATION.invalidateStudent(System.currentTimeMillis(), messageID, studentID -> {
                 reactionAddEvent.getChannel().retrieveMessageById(messageID).queue(msg -> {
                     EmbedBuilder bld = new EmbedBuilder(msg.getEmbeds().get(0));

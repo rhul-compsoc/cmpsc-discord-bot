@@ -198,7 +198,7 @@ public class Poll extends Command implements ComponentInteractionHandler, SlashC
     @Override
     public void handleSelectionMenuInteraction(GenericSelectMenuInteractionEvent<?,?> genericInteraction) {
         if (!(genericInteraction instanceof StringSelectInteractionEvent interaction)) return;
-        int id = Integer.parseInt(interaction.getId().split("\\|")[1]);
+        int id = Integer.parseInt(interaction.getComponentId().split("\\|")[1]);
         int set = 0;
         for (String selection : interaction.getValues()) {
             set |= 1 << Integer.parseInt(selection);

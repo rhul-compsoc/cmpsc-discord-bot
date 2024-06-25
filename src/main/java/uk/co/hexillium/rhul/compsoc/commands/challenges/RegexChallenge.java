@@ -317,7 +317,8 @@ class RegexGroup extends RegexNode {
     }
 
     String getDebugString() {
-        return "RegexGroup:{modifier=" + modifier.getDebugString() + ",nodes=" + Arrays.stream(nodes).map(RegexNode::getDebugString).collect(Collectors.toList()) + "}";
+        return "RegexGroup:{modifier=" + modifier.getDebugString() +
+                ",nodes=" + Arrays.stream(nodes).map(RegexNode::getDebugString).collect(Collectors.toList()) + "}";
     }
 }
 
@@ -442,7 +443,10 @@ class RegexCharacterClass extends RegexNode {
     }
 
     String getDebugString() {
-        return "RegexCharClass:{modifier=" + modifier.getDebugString() + ",display=" + Arrays.toString(charactersDisplay) + ",valid=" + Arrays.toString(validChars) + ",notted=" + notted + "}";
+        return "RegexCharClass:{modifier=" + modifier.getDebugString() +
+                ",display=" + Arrays.toString(charactersDisplay) +
+                ",valid=" + Arrays.toString(validChars) +
+                ",notted=" + notted + "}";
     }
 }
 
