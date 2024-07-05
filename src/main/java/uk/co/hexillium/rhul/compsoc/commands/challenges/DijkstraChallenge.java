@@ -4,10 +4,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
 
+import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -47,6 +50,15 @@ public class DijkstraChallenge extends GraphChallenge{
         while (to == from)
             to = this.graph.nodes.get(ThreadLocalRandom.current().nextInt(max));
         nodeLabels = this.graph.nodes.stream().map(Node::getLabel).collect(Collectors.toSet());
+
+        double maxDist = Math.sqrt(graph.nodes.stream().map(node -> node.neighbours.keySet().stream().map(node::sqDistTo)
+                        .max(Double::compareTo).orElse(0d))
+                        .max(Double::compareTo).orElse(100d));
+
+        for (Node node : graph.nodes) {
+            node.neighbours.replaceAll((n, v) -> 1 + ThreadLocalRandom.current().nextInt(3) + (int) (6 * (Math.sqrt(node.sqDistTo(n)) / maxDist)));
+        }
+
         this.solutions = findPath(from, to);
 
         // some function of the total nodes, the total number of steps in the path and a random variable to make this process less reversible
@@ -131,18 +143,48 @@ public class DijkstraChallenge extends GraphChallenge{
 
         g2.setStroke(new BasicStroke(5));
 
+        int max = 0, min = Integer.MAX_VALUE;
+        for (int i : distances.values()){
+            if (i < min){
+                min = i;
+            }
+            if (i > max){
+                max = i;
+            }
+        }
+        List<Color> colors = getColourGradient((max - min) + 1);
+        Map<Node, Color> colorMap = new HashMap<>();
+        for(Map.Entry<Node, Integer> entry : distances.entrySet()){
+            colorMap.put(entry.getKey(), colors.get(entry.getValue() - min));
+        }
+        VoronoiGraph voronoiGraph = graph.createDual();
+        voronoiGraph.paintBackground(image, colorMap);
+
+        double xStep = image.getWidth()/ (double) colors.size();
+        for (int i = 0; i < colors.size(); i++){
+            g2.setColor(colors.get(i));
+            g2.fillRect((int) (xStep * i), image.getHeight() - 40, (int) xStep + 1, 40);
+        }
+        g2.setStroke(new BasicStroke(10));
+
+        g2.setColor(Color.BLACK);
+        g2.drawLine(0, 955, 1000, 955);
+
+        g2.setStroke(new BasicStroke(5));
+
+
         g2.setColor(Color.WHITE);
         this.graph.drawConnections(this.graph.nodes, g2, true);
 
-        g2.setColor(Color.RED);
-        Node prev = solution.nodes.get(0);
-        for (int i = 1; i < solution.nodes.size(); i++){
-            Node next = solution.nodes.get(i);
-            this.graph.drawLine(prev.x, prev.y, next.x, next.y, g2);
-            prev = next;
-        }
+        g2.setColor(Color.GREEN);
+        g2.setStroke(new BasicStroke(10));
+        drawCorrectPath(solution, g2);
+
 
         g2.setColor(Color.RED);
+        g2.setStroke(new BasicStroke(5));
+        drawCorrectPath(solution, g2);
+
         g2.setStroke(new BasicStroke(1));
 
         graph.drawWeights(g2, fontSize, true);
@@ -151,6 +193,17 @@ public class DijkstraChallenge extends GraphChallenge{
         int bordersize = 4;
         graph.drawNodes(g2, fontSize, nodesize, bordersize, graph.nodes);
         return image;
+    }
+
+    private void drawCorrectPath(Path solution, Graphics2D g2) {
+        Node prev = solution.nodes.get(0);
+        for (int i = 1; i < solution.nodes.size(); i++){
+            Node next = solution.nodes.get(i);
+            this.graph.drawLine(prev.x, prev.y, next.x, next.y, g2);
+            prev = next;
+        }
+
+        g2.setColor(Color.RED);
     }
 
     @Override
@@ -174,11 +227,13 @@ public class DijkstraChallenge extends GraphChallenge{
         );
     }
 
+    HashMap<Node, Integer> distances;
+
     Path[] findPath(Node source, Node destination){
         //Paths are sorted on their length, so the first path is the shortest
         PriorityQueue<Path> paths = new PriorityQueue<>(Comparator.comparing(Path::getCost));
         HashSet<Node> explored = new HashSet<>();
-        HashMap<Node, Integer> distances = new HashMap<>();
+        distances = new HashMap<>();
         totalOperations = 0;
         explored.add(source);
         paths.add(new Path(Collections.singletonList(source), 0));
@@ -198,7 +253,8 @@ public class DijkstraChallenge extends GraphChallenge{
             if (path.getHead().equals(destination)){
                 minimumCost = path.getCost();
                 validPaths.add(path);
-                continue;
+                //skip this to continue processing
+//                continue;
             }
             //index all neighbors of the head of the path
             for (Node child : path.getHead().getNeighbours().keySet()){
@@ -207,6 +263,7 @@ public class DijkstraChallenge extends GraphChallenge{
                 if (distances.containsKey(child)){
                     //if we have already found a shorter path to this node, then don't create a new path to it.
                     //we need to consider equal paths too, so that multiple correct solutions for this puzzle are considered.
+
                     if (newCost > distances.get(child)){
                         continue;
                     }
@@ -217,6 +274,7 @@ public class DijkstraChallenge extends GraphChallenge{
 
             }
         }
+        distances.put(source, 0);
         return validPaths.toArray(new Path[0]);
     }
 

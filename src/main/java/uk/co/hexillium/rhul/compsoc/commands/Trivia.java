@@ -372,10 +372,12 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
 
         if (event.getCommand().equalsIgnoreCase("solve")) {
             if (event.getFullArg().equalsIgnoreCase("debug")) {
-                event.reply(String.format("Type: %s,\n" +
-                                "Timeout: %d,\n" +
-                                "Question: %s,\n" +
-                                "Other Debug info:\n%s",
+                event.reply(String.format("""
+                                Type: %s,
+                                Timeout: %d,
+                                Question: %s,
+                                Other Debug info:
+                                %s""",
                         currentQuestion.getClass().getName(),
                         currentQuestion.minimumSolveTimeSeconds(),
                         currentQuestion.getQuestion(),
@@ -385,10 +387,12 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
                 return;
             }
             if (event.getFullArg().equalsIgnoreCase("debugprev")) {
-                event.reply(String.format("Type: %s,\n" +
-                                "Timeout: %d,\n" +
-                                "Question: %s,\n" +
-                                "Other Debug info:\n%s",
+                event.reply(String.format("""
+                                Type: %s,
+                                Timeout: %d,
+                                Question: %s,
+                                Other Debug info:
+                                %s""",
                         lastQuestion.getClass().getName(),
                         lastQuestion.minimumSolveTimeSeconds(),
                         lastQuestion.getQuestion(),
@@ -438,11 +442,15 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         if (event.getFullArg().isBlank() /*|| event.getArgs()[0].equalsIgnoreCase("help")*/) {
             EmbedBuilder builder = new EmbedBuilder();
             builder.setTitle("Trivia help");
-            builder.setDescription("Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.\n\n" +
-                    "Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).\n\n" +
-                    "If you get a question wrong, you can use `!solve` for the bot to work it out, and show you how to solve it.\n\n" +
-                    "You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  " +
-                    "[You can see the Scoreboard here, too.](https://passport.cmpsc.uk/)");
+            builder.setDescription("""
+                    Answer questions that pop up in chat to score points.  The more difficult the question, the more points you'll earn.
+
+                    Answering the question incorrectly will deduct that many points - so don't guess (it also spoils it slightly for other people).
+
+                    If you get a question wrong, you can use `!solve` for the bot to work it out, and show you how to solve it.
+
+                    You can find out who is doing well using the `!leaderboard` command.  You can look at specific pages using `!leaderboard <pagenum>`.  \
+                    [You can see the Scoreboard here, too.](https://passport.cmpsc.uk/)""");
 //            builder.addField("The Algebra Symbols:",
 //                    Arrays.stream(BooleanOP.values()).map(op -> op.name() + " `" + op.symbol + "`").collect(Collectors.joining("\n"))
 //                            + "\nNOT `¬`"
@@ -531,14 +539,14 @@ public class Trivia extends Command implements EventListener, ComponentInteracti
         EmbedBuilder embed = new EmbedBuilder();
         embed.setTitle("Leaderboard For Season " + seasonNumber);
         StringBuilder strbld = new StringBuilder();
-        strbld.append("Run `!leaderboard <pagenum>` to view the scores for that page");
-        strbld.append("\n");
-        strbld.append("You can also use the CompSoc passport to see the scores, [here](https://passport.cmpsc.uk/).");
-        strbld.append("```\n");
-        strbld.append("Rank | Score | Username ");
-        strbld.append("\n");
-        strbld.append("-------------------------------");
-        strbld.append("\n");
+        strbld.append("Run `!leaderboard <pagenum>` to view the scores for that page")
+                .append("\n")
+                .append("You can also use the CompSoc passport to see the scores, [here](https://passport.cmpsc.uk/).")
+                .append("```\n")
+                .append("Rank | Score | Username ")
+                .append("\n")
+                .append("-------------------------------")
+                .append("\n");
         boolean seenSelf = selfScore == null;
         if (!seenSelf && selfScore.getPosition() <= scores.get(0).getPosition()) {
             if (!scores.contains(selfScore)) {

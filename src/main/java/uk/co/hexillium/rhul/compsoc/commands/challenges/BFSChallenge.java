@@ -84,16 +84,7 @@ public class BFSChallenge extends GraphChallenge{
         BufferedImage colourMap = new BufferedImage(baseImage.getWidth(), baseImage.getHeight(), BufferedImage.TYPE_INT_ARGB);
 
         int stages = this.solution.stages.size();
-
-        float startHue = 240 / 360f;
-        float endHue = (360 + 60) / 360f;
-
-        float hueGap = (endHue - startHue) / stages;
-
-        List<Color> colors = new ArrayList<>();
-        for (int i = 0; i < stages; i++){
-            colors.add(Color.getHSBColor(startHue + hueGap * (i + 1), 0.8f, 0.8f));
-        }
+        List<Color> colors = getColourGradient(stages);
 
         VoronoiGraph voronoiGraph = graph.createDual();
 //        voronoiGraph.drawDebugImage();

@@ -1,14 +1,12 @@
 package uk.co.hexillium.rhul.compsoc.commands.challenges;
 
 import javax.imageio.ImageIO;
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Desktop;
-import java.awt.Graphics2D;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,7 +46,7 @@ public abstract class GraphChallenge extends Challenge {
         this.graph = new DelaunayGraph(nodes);
     }
 
-    public GraphChallenge(DelaunayGraph graph){
+    protected GraphChallenge(DelaunayGraph graph){
         this.graph = graph;
     }
 
@@ -79,6 +77,20 @@ public abstract class GraphChallenge extends Challenge {
     public BufferedImage getImage() {
         return graph.genImage(true, false);
     }
+
+    public List<Color> getColourGradient(int stages){
+        float startHue = 240 / 360f;
+        float endHue = (360 + 60) / 360f;
+
+        float hueGap = (endHue - startHue) / stages;
+
+
+        List<Color> colors = new ArrayList<>();
+        for (int i = 0; i < stages; i++){
+            colors.add(Color.getHSBColor(startHue + hueGap * (i + 1), 0.8f, 0.8f));
+        }
+        return colors;
+    }
 }
 
 abstract class Graph {
@@ -89,11 +101,19 @@ abstract class Graph {
     }
 
     protected void drawConnections(ArrayList<Node> nodes, Graphics2D g2, boolean solution){
+        g2.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_OFF);
+
         for (Node node : nodes) {
             for (Node other : node.neighbours.keySet()) {
                 drawLine(node.x, node.y, other.x, other.y, g2);
             }
         }
+
+        g2.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_OFF);
     }
 
     protected void drawNodes(Graphics2D g2, float fontSize, int nodesize, int bordersize, Iterable<Node> nodes) {
@@ -245,7 +265,7 @@ class VoronoiGraph extends Graph {
         drawNodes(g2, fontSize, nodesize, bordersize, nodes);
 
         try {
-            saveAndOpen(image, "triangles");
+            saveAndOpen(image , "triangles");
             saveAndOpen(image2, "voronoi");
             saveAndOpen(image3, "mixed");
             saveAndOpen(image4, "vortess");
@@ -301,6 +321,16 @@ class VoronoiGraph extends Graph {
         }
     }
 
+    public void paintBackground(BufferedImage bufferedImage, Map<Node, Color> colourMap) {
+        Graphics2D g2 = bufferedImage.createGraphics();
+        for (Map.Entry<Node, Color> entry : colourMap.entrySet()) {
+            g2.setColor(entry.getValue());
+            for (Triangle t : bounds.get(entry.getKey())){
+                drawTriangle(g2, t);
+            }
+        }
+    }
+
     private void drawTriangle(Graphics2D g2, Triangle t){
         int[] x = {(int) (t.n1.x * 10), (int) (t.n2.x * 10), (int) (t.n3.x * 10)};
         int[] y = {(int) (t.n1.y * 10), (int) (t.n2.y * 10), (int) (t.n3.y * 10)};
@@ -313,6 +343,9 @@ class VoronoiGraph extends Graph {
 }
 
 class DelaunayGraph extends Graph {
+
+    private final int nodesize = 40;
+    private final int bordersize = 4;
 
     private final ArrayList<Triangle> triangles;
 
@@ -450,25 +483,23 @@ class DelaunayGraph extends Graph {
         BufferedImage image = new BufferedImage(1000, 1000, BufferedImage.TYPE_4BYTE_ABGR);
 
         Graphics2D g2 = (Graphics2D) image.getGraphics();
-
-        g2.setStroke(new BasicStroke(5));
-
         float fontSize = 35;
         g2.setFont(g2.getFont().deriveFont(fontSize));
 
-
+        g2.setStroke(new BasicStroke(5));
         g2.setColor(Color.WHITE);
         drawConnections(nodes, g2, solution);
 
         g2.setColor(Color.RED);
-        g2.setStroke(new BasicStroke(1));
+        g2.setStroke(new BasicStroke(5));
 
         if (drawWeights) {
             drawWeights(g2, fontSize, solution);
         }
-        int nodesize = 40;
-        int bordersize = 4;
+
         drawNodes(g2, fontSize, nodesize, bordersize, nodes);
+
+
         return image;
     }
 }
