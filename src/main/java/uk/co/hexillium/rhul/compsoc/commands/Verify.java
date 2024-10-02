@@ -4,6 +4,8 @@ import jakarta.mail.Address;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.events.interaction.GenericInteractionCreateEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.UserContextInteractionEvent;
@@ -14,6 +16,8 @@ import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.utils.TimeFormat;
 import net.dv8tion.jda.api.utils.TimeUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import uk.co.hexillium.rhul.compsoc.Bot;
 import uk.co.hexillium.rhul.compsoc.commands.handlers.SlashCommandHandler;
 import uk.co.hexillium.rhul.compsoc.commands.handlers.UserCommandHandler;
@@ -29,6 +33,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Verify implements SlashCommandHandler, UserCommandHandler {
+
+    private static final long GUILD_ID = 500612695570120704L;
+    private static final long ROLE_ID = 768202524163047484L;
+    private static final Logger log = LoggerFactory.getLogger(Verify.class);
 
     Pattern emailAddressVerifier = Pattern.compile("[a-z]{4}\\d{3,4}@live.rhul.ac.uk");
     String body = """
@@ -48,12 +56,15 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
         return List.of(
                 Commands.slash("verifyemail", "Verify your email address to prove studentship")
                         .setDefaultPermissions(DefaultMemberPermissions.ENABLED)
+                        .setGuildOnly(true)
                         .addOption(OptionType.STRING, "email_address", "Your RHUL email address, in zzzz000@live.rhul.ac.uk format", true, false),
                 Commands.slash("verifycode", "Redeem your code to verify your email address")
                         .setDefaultPermissions(DefaultMemberPermissions.ENABLED)
-                        .addOption(OptionType.STRING, "code", "The code sent in your email."),
+                        .setGuildOnly(true)
+                        .addOption(OptionType.STRING, "code", "The code sent in your email.", true),
                 Commands.user("Verification Information")
                         .setDefaultPermissions(DefaultMemberPermissions.DISABLED)
+                        .setGuildOnly(true)
         );
     }
 
@@ -61,9 +72,9 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
     public void handleSlashCommand(SlashCommandInteractionEvent event) {
         if (event.getName().equals("verifyemail")){
             if (event.getMember() == null) event.reply("Please use this command in the guild, it will still remain private.").queue();
-            Duration lengthOfStay = Duration.between(OffsetDateTime.now(), event.getMember().getTimeJoined()).abs();
-            if (lengthOfStay.toDays() < 28){
-                event.reply("To prevent spam, there is currently a 28-day wait after joining before using this command")
+            if (event.getUser().getTimeCreated().isAfter(OffsetDateTime.now().minusMonths(6))){
+                event.reply("To prevent spam, your discord account must be more than 6 months old.  " +
+                                "Please contact a member of committee for manual verification.")
                         .setEphemeral(true).queue();
                 return;
             }
@@ -74,11 +85,6 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
             }
             emailAddr = emailAddr.toLowerCase();
 
-            if (event.getMember().getRoles().stream().noneMatch(r -> r.getIdLong() == 1024355501124898867L)){
-                event.reply("This command is currently limited").setEphemeral(true).queue();
-                return;
-            }
-
             if (Bot.mail == null){
                 event.reply("Mail module is not currently running.  Please try again later.").setEphemeral(true).queue();
                 return;
@@ -88,13 +94,19 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
                 event.reply("You are already verified.").setEphemeral(true).queue();
                 return;
             }
+            OffsetDateTime recentAttempt = Database.EMAIL_VERIFICATION.getMostRecentVerificationAttempt(event.getUser().getIdLong());
+            if (recentAttempt != null
+                    && Duration.between(recentAttempt, OffsetDateTime.now()).toHours() < 6){
+                event.reply("You must wait a few hours between verification attempts.  Please contact a member of committee for assistance.").setEphemeral(true).queue();
+                return;
+            }
 
             Matcher matcher = emailAddressVerifier.matcher(emailAddr);
             if (!matcher.matches()){
                 event.getHook().sendMessage("Please ensure you have the email address in the correct RHUL format, " +
-                        "containing your 4 letter code and 3 numbers, using `live.` in the domain.  (This check is run, but its result ignored for testing... proceeding anyway...")
+                        "containing your 4 letter code and 3 numbers, using `live.` in the domain.")
                         .setEphemeral(true).queue();
-//                return;
+                return;
             }
 
             Address address;
@@ -152,10 +164,20 @@ public class Verify implements SlashCommandHandler, UserCommandHandler {
             EmailVerification.VerificationResult result = Database.EMAIL_VERIFICATION.acceptToken(bytes, event.getUser().getIdLong());
             if (result.isError()){
                 event.reply("An error with code " + result.toString()).setEphemeral(true).queue();
+                log.warn("User {} failed to verify, resulting code {} from token {}", event.getUser().getName(), result, uuid);
                 return;
             } else {
                 event.reply("Success! You've now been verified").setEphemeral(true).queue();
-                //todo add some code here for things like roles
+                Guild guild = event.getJDA().getGuildById(GUILD_ID);
+                if (guild == null) return;
+                Role role = guild.getRoleById(ROLE_ID);
+                if (role == null){
+                    event.reply("Error: role grant not specified.  Please contact committee to report this.")
+                            .setEphemeral(true).queue();
+                    log.error("Failed to fetch role {} from guild {}", ROLE_ID, GUILD_ID);
+                    return;
+                }
+                guild.addRoleToMember(event.getUser(), role).queue();
             }
 
         }
